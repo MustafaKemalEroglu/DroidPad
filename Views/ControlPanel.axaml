@@ -1,0 +1,123 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:WaydroidController.ViewModels"
+             x:Class="WaydroidController.Views.ControlPanel"
+             x:DataType="vm:MainWindowViewModel">
+
+    <Border Width="330" Height="680" Background="#DD242424" BorderBrush="#444444" BorderThickness="1" CornerRadius="6" Padding="10">
+        <Grid RowDefinitions="Auto, *">
+
+            <!-- Başlık -->
+            <TextBlock Grid.Row="0" Text="MuMu Keymapper" Classes="header" Margin="0,0,0,8"/>
+
+            <!-- Sekmeli İçerik Alanı -->
+            <TabControl Grid.Row="1">
+
+                <!-- SEKME 1: TUŞLAR VE JOYSTICK (MUMU TARZI) -->
+                <TabItem Header="Tuşlar">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="10" Margin="0,5,0,0">
+
+                            <!-- Ortak Koordinat Seçim Aracı -->
+                            <Border Background="#1f1f1f" BorderBrush="#444444" BorderThickness="1" CornerRadius="4" Padding="8">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="1. Hedef Konum Belirle" Classes="header"/>
+                                    <Button Content="🎯 Ekrandan Konum Seç (Tıkla)" Classes="warning" Command="{Binding StartPickingCoordinateCommand}" Height="32"/>
+                                    <TextBlock Text="{Binding CoordName, StringFormat='Seçilen: {0}'}" Foreground="#00FFCC" FontSize="11" FontFamily="Consolas"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Tap (Tekil Tuş) Ekleme Aracı -->
+                            <Border Background="#1f1f1f" BorderBrush="#444444" BorderThickness="1" CornerRadius="4" Padding="8">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="2. Dokunma Tuşu Ekle (Tap)" Classes="header"/>
+                                    <Grid ColumnDefinitions="60, *" ColumnSpacing="5">
+                                        <TextBlock Text="Tuş:" VerticalAlignment="Center" Foreground="White"/>
+                                        <TextBox Grid.Column="1" Text="{Binding NewTapKey}" Height="28"/>
+                                    </Grid>
+                                    <Button Content="+ Dokunma Tuşu Ekle" Classes="success" Command="{Binding AddTapBindingCommand}" Height="30"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Sanal Joystick Ekleme Aracı -->
+                            <Border Background="#1f1f1f" BorderBrush="#444444" BorderThickness="1" CornerRadius="4" Padding="8">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="3. Sanal Joystick Ekle" Classes="header"/>
+                                    <Grid ColumnDefinitions="60, *" RowDefinitions="Auto, Auto" RowSpacing="5" ColumnSpacing="5">
+                                        <TextBlock Text="Grup:" VerticalAlignment="Center" Foreground="White"/>
+                                        <ComboBox Grid.Column="1" ItemsSource="{Binding JoystickPresets}" SelectedItem="{Binding JoystickPreset}" Height="28"/>
+
+                                        <TextBlock Grid.Row="1" Text="Yarıçap:" VerticalAlignment="Center" Foreground="White"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding JoystickRadius}" Height="28"/>
+                                    </Grid>
+                                    <Button Content="+ Joystick Grubu Ekle" Classes="primary" Command="{Binding AddMuMuJoystickCommand}" Height="30"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Atanmış Tuşlar Listesi ve Silme -->
+                            <TextBlock Text="Aktif Tuş Listesi" Classes="header" Margin="0,5,0,0"/>
+                            <ListBox Height="130" ItemsSource="{Binding KeyBindings}" SelectedItem="{Binding SelectedKeyBinding}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding KeyName, StringFormat='Tuş [{0}]'}" FontFamily="Consolas" Foreground="#ff77ff"/>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <Button Content="Seçili Tuşu Sil" Classes="danger" Command="{Binding RemoveKeyBindingCommand}" Height="30"/>
+
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- SEKME 2: KOORDİNATLAR -->
+                <TabItem Header="Koordinat">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="8" Margin="0,5,0,0">
+                            <TextBlock Text="Koordinat Kayıtları" Classes="header"/>
+                            <Grid ColumnDefinitions="50, *" RowDefinitions="Auto, Auto, Auto" Margin="0,0,0,5">
+                                <TextBlock Text="İsim:" VerticalAlignment="Center" Foreground="White"/>
+                                <TextBox Grid.Column="1" Text="{Binding CoordName}" Height="28"/>
+
+                                <TextBlock Grid.Row="1" Text="X:" VerticalAlignment="Center" Foreground="White"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CoordX}" Height="28"/>
+
+                                <TextBlock Grid.Row="2" Text="Y:" VerticalAlignment="Center" Foreground="White"/>
+                                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding CoordY}" Height="28"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="*, *" ColumnSpacing="5">
+                                <Button Content="Ekle" Classes="success" Command="{Binding AddCoordinateCommand}" Height="30"/>
+                                <Button Grid.Column="1" Content="Sil" Classes="danger" Command="{Binding RemoveCoordinateCommand}" Height="30"/>
+                            </Grid>
+                            <ListBox Height="200" ItemsSource="{Binding Coordinates}" SelectedItem="{Binding SelectedCoordinate}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DisplayText}" FontFamily="Consolas" Foreground="Cyan"/>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- SEKME 3: MAKRO -->
+                <TabItem Header="Makro">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="8" Margin="0,5,0,0">
+                            <TextBlock Text="Otomasyon ve Makro" Classes="header"/>
+                            <Grid ColumnDefinitions="*, *" ColumnSpacing="5">
+                                <Button Content="Kaydet" Classes="primary" Click="OnSaveProfileClick" Height="30"/>
+                                <Button Grid.Column="1" Content="Yükle" Classes="primary" Click="OnLoadProfileClick" Height="30"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="*, *" ColumnSpacing="5" Margin="0,5,0,0">
+                                <Button Content="Başlat" Classes="success" Command="{Binding StartCommand}" IsEnabled="{Binding !IsRunning}" Height="32"/>
+                                <Button Grid.Column="1" Content="Durdur" Classes="danger" Command="{Binding StopCommand}" IsEnabled="{Binding IsRunning}" Height="32"/>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+            </TabControl>
+
+        </Grid>
+    </Border>
+</UserControl>

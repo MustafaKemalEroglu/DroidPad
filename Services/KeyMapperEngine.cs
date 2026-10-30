@@ -12,6 +12,11 @@ public sealed class KeyMapperEngine
     private readonly Action<string> _log;
     private string? _adbTarget;
 
+    // Joystick aktif parmak pozisyonu takibi (Çift tuş / ara yön geçişleri için)
+    private int? _currentTouchX;
+    private int? _currentTouchY;
+    private bool _isJoystickActive;
+
     public KeyMapperEngine(Action<string> log)
     {
         _log = log;
@@ -35,9 +40,8 @@ public sealed class KeyMapperEngine
         if (_adbTarget is null) return;
 
         var binding = bindings.FirstOrDefault(b => b.KeyName.Equals(keyName, StringComparison.OrdinalIgnoreCase));
-        if (binding == null) return;
+        if (binding == null || binding.Type != KeyBindingType.Tap) return;
 
-        // Gerçek Waydroid çözünürlüğünü al ve ölçeklendirme faktörlerini hesapla
         var (cw, ch) = await AdbService.GetResolutionAsync(_adbTarget, ct);
         var scaleX = profileRes.Width > 0 ? (double)cw / profileRes.Width : 1.0;
         var scaleY = profileRes.Height > 0 ? (double)ch / profileRes.Height : 1.0;
@@ -45,24 +49,90 @@ public sealed class KeyMapperEngine
         int targetX = (int)(binding.X * scaleX);
         int targetY = (int)(binding.Y * scaleY);
 
-        if (binding.Type == KeyBindingType.Tap)
-        {
-            var (ok, err) = await AdbService.TapAsync(_adbTarget, targetX, targetY, ct);
-            if (!ok) _log($"Tuş Hatası [{keyName}]: {err}");
-        }
-        else if (binding.Type == KeyBindingType.Joystick)
-        {
-            int radius = (int)(binding.Radius * scaleX);
-            int endX = targetX;
-            int endY = targetY;
+        var (ok, err) = await AdbService.TapAsync(_adbTarget, targetX, targetY, ct);
+        if (!ok) _log($"Tuş Hatası [{keyName}]: {err}");
+    }
 
-            if (keyName.Equals("W", StringComparison.OrdinalIgnoreCase)) endY -= radius;
-            else if (keyName.Equals("S", StringComparison.OrdinalIgnoreCase)) endY += radius;
-            else if (keyName.Equals("A", StringComparison.OrdinalIgnoreCase)) endX -= radius;
-            else if (keyName.Equals("D", StringComparison.OrdinalIgnoreCase)) endX += radius;
-
-            var (ok, err) = await AdbService.SwipeAsync(_adbTarget, targetX, targetY, endX, endY, 80, ct);
-            if (!ok) _log($"Joystick Hatası [{keyName}]: {err}");
+    // Gelişmiş Joystick Durum ve Akıcı Sınır Kaydırma Yönetimi
+    public async Task UpdateJoystickStateAsync(IReadOnlyList<KeyBinding> allBindings, IReadOnlyCollection<string> pressedKeys, ResolutionDto profileRes, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(_adbTarget))
+        {
+            await InitializeAsync(ct);
         }
+        if (_adbTarget is null) return;
+
+        var joystickBindings = allBindings.Where(b => b.Type == KeyBindingType.Joystick).ToList();
+        if (!joystickBindings.Any()) return;
+
+        var sample = joystickBindings.First();
+        int baseCenterX = sample.X;
+        int baseCenterY = sample.Y;
+        int radius = sample.Radius;
+
+        var (cw, ch) = await AdbService.GetResolutionAsync(_adbTarget, ct);
+        var scaleX = profileRes.Width > 0 ? (double)cw / profileRes.Width : 1.0;
+        var scaleY = profileRes.Height > 0 ? (double)ch / profileRes.Height : 1.0;
+
+        int centerX = (int)(baseCenterX * scaleX);
+        int centerY = (int)(baseCenterY * scaleX); // Ölçek koruma
+        int scaledRadius = (int)(radius * scaleX);
+
+        double dx = 0;
+        double dy = 0;
+
+        foreach (var jb in joystickBindings)
+        {
+            if (pressedKeys.Contains(jb.KeyName))
+            {
+                if (jb.Direction == JoystickDirection.Up) dy -= 1.0;
+                else if (jb.Direction == JoystickDirection.Down) dy += 1.0;
+                else if (jb.Direction == JoystickDirection.Left) dx -= 1.0;
+                else if (jb.Direction == JoystickDirection.Right) dx += 1.0;
+            }
+        }
+
+        // Hiçbir joystick tuşuna basılmıyorsa parmağı kaldır (merkeze tap)
+        if (dx == 0 && dy == 0)
+        {
+            if (_isJoystickActive)
+            {
+                var (okTap, errTap) = await AdbService.TapAsync(_adbTarget, centerX, centerY, ct);
+                if (!okTap) _log($"Joystick Bırakma Hatası: {errTap}");
+                _isJoystickActive = false;
+                _currentTouchX = null;
+                _currentTouchY = null;
+            }
+            return;
+        }
+
+        // Çift tuş (diagonal / ara yön: WA, WD, SD, SA) normalizasyonu
+        if (dx != 0 && dy != 0)
+        {
+            double factor = 1.0 / Math.Sqrt(2);
+            dx *= factor;
+            dy *= factor;
+        }
+
+        // Çemberin sınırındaki hedef nokta
+        int targetX = centerX + (int)(dx * scaledRadius);
+        int targetY = centerY + (int)(dy * scaledRadius);
+
+        if (!_isJoystickActive || _currentTouchX == null || _currentTouchY == null)
+        {
+            // İlk dokunuş: Merkezden çember dışına doğru kaydır ve basılı tut
+            var (okSwipe, errSwipe) = await AdbService.SwipeAsync(_adbTarget, centerX, centerY, targetX, targetY, 20000, ct);
+            if (!okSwipe) _log($"Joystick Başlangıç Kaydırma Hatası: {errSwipe}");
+            _isJoystickActive = true;
+        }
+        else
+        {
+            // Farklı yöne geçiş: Parmak kaldırılmadan mevcut konumdan yeni konuma kaydır
+            var (okMove, errMove) = await AdbService.SwipeAsync(_adbTarget, _currentTouchX.Value, _currentTouchY.Value, targetX, targetY, 20000, ct);
+            if (!okMove) _log($"Joystick Yön Değiştirme Hatası: {errMove}");
+        }
+
+        _currentTouchX = targetX;
+        _currentTouchY = targetY;
     }
 }

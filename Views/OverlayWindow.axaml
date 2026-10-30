@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:WaydroidController.ViewModels"
         xmlns:m="using:WaydroidController.Models"
+        xmlns:v="using:WaydroidController.Views"
         x:Class="WaydroidController.Views.OverlayWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Waydroid Controller"
@@ -12,15 +13,20 @@
         WindowState="Maximized">
 
     <Grid>
-        <!-- 1. Ekran Üzerindeki Tuş Rozetleri (Canvas) -->
+        <!-- 0. Düzenleme Modu Aktifken Arka Planı Hafif Karartan Perde -->
+        <Border Background="#44000000" IsVisible="{Binding IsPanelOpen}" IsHitTestVisible="False"/>
+
+        <!-- 1. Ekran Üzerindeki Tap Tuşları (Canvas & Sürüklenebilir) -->
         <ItemsControl ItemsSource="{Binding KeyBindings}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <Canvas />
+                    <Canvas Background="Transparent"
+                            PointerPressed="OnCanvasPointerPressed"
+                            PointerMoved="OnCanvasPointerMoved"
+                            PointerReleased="OnCanvasPointerReleased"/>
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
 
-            <!-- Avalonia'da container stillerini Styles içerisindeki ContentPresenter ile tanımlıyoruz -->
             <ItemsControl.Styles>
                 <Style Selector="ContentPresenter" x:DataType="m:KeyBinding">
                     <Setter Property="Canvas.Left" Value="{Binding X}"/>
@@ -30,180 +36,138 @@
 
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                    <Border Width="40" Height="40" CornerRadius="20"
+                    <Border Width="42" Height="42" CornerRadius="21"
                             BorderThickness="1.5"
                             HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Classes.pressed="{Binding IsPressed}">
+                            Classes.pressed="{Binding IsPressed}"
+                            PointerPressed="OnKeyBadgePointerPressed"
+                            PointerMoved="OnKeyBadgePointerMoved"
+                            PointerReleased="OnKeyBadgePointerReleased"
+                            Tag="{Binding}">
                         <Border.Styles>
-                            <!-- Normal Durum: %40 Şeffaf Siyah Arka Plan & Yarı Şeffaf Neon Çerçeve -->
                             <Style Selector="Border">
-                                <Setter Property="Background" Value="#66000000"/>
-                                <Setter Property="BorderBrush" Value="#8800FFCC"/>
+                                <Setter Property="Background" Value="#AA1E1E1E"/>
+                                <Setter Property="BorderBrush" Value="#00FFCC"/>
                             </Style>
-                            <!-- Tuşa Basıldığı An: %70 Şeffaf Parlak Yeşil -->
                             <Style Selector="Border.pressed">
                                 <Setter Property="Background" Value="#B300FF66"/>
                                 <Setter Property="BorderBrush" Value="#FFFFFF"/>
                             </Style>
                         </Border.Styles>
 
-                        <TextBlock Text="{Binding KeyName}" Foreground="#E0FFFFFF"
-                                   FontFamily="Consolas" FontSize="13" FontWeight="Bold"
+                        <TextBlock Text="{Binding KeyName}" Foreground="#FFFFFF"
+                                   FontFamily="Consolas" FontSize="14" FontWeight="Bold"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <!-- 2. Sağdan Açılır-Kapanır Kontrol Paneli -->
-        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="10" Spacing="5">
-            <!-- Paneli Aç/Kapat Butonu -->
-            <Button Content="⚙ Kontrol Paneli" Classes="primary" Width="120" Height="32" Click="OnTogglePanelClick"/>
+        <!-- 2. Ekran Üzerindeki Çember Joystick Grupları (Canvas & Tek Parça Sürüklenebilir) -->
+        <ItemsControl ItemsSource="{Binding JoystickGroups}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <Canvas Background="Transparent"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
 
-            <!-- Yan Panel (Düzenli Sekmeli Yapı) -->
-            <Border x:Name="SettingsPanel" Width="330" Height="680" Background="#DD242424" BorderBrush="#444444" BorderThickness="1" CornerRadius="6" IsVisible="False" Padding="10">
-                <Grid RowDefinitions="Auto, *">
+            <ItemsControl.Styles>
+                <Style Selector="ContentPresenter" x:DataType="m:JoystickGroup">
+                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                </Style>
+            </ItemsControl.Styles>
 
-                    <!-- Başlık -->
-                    <TextBlock Grid.Row="0" Text="Waydroid Kontrol Merkezi" Classes="header" Margin="0,0,0,8"/>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Grid Width="140" Height="140"
+                          Margin="-70,-70,0,0"
+                          Background="Transparent"
+                          PointerPressed="OnJoystickPointerPressed"
+                          PointerMoved="OnJoystickPointerMoved"
+                          PointerReleased="OnJoystickPointerReleased"
+                          Tag="{Binding}">
 
-                    <!-- Sekmeli İçerik Alanı -->
-                    <TabControl Grid.Row="1" Margin="0,0,0,0">
+                        <!-- Dış Çember -->
+                        <Ellipse Width="140" Height="140"
+                                 Stroke="#00FFCC" StrokeThickness="2" Fill="#221E1E1E"/>
 
-                        <!-- SEKME 1: TUŞ EŞLEME -->
-                        <TabItem Header="Tuşlar">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <StackPanel Spacing="8" Margin="0,5,0,0">
-                                    <TextBlock Text="Tuş Atama (Key Mapper)" Classes="header"/>
-                                    <Grid ColumnDefinitions="50, *" RowDefinitions="Auto, Auto, Auto" Margin="0,0,0,5">
-                                        <TextBlock Text="Tuş:" VerticalAlignment="Center" Foreground="White"/>
-                                        <TextBox Grid.Column="1" Text="{Binding MapButtonKey}" Height="28"/>
+                        <!-- Üst Tuş (Up) -->
+                        <Border Width="36" Height="36" CornerRadius="18" Background="#AA1E1E1E" BorderBrush="#00FFCC" BorderThickness="1.5"
+                                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0">
+                            <TextBlock Text="{Binding UpKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
 
-                                        <TextBlock Grid.Row="1" Text="Tip:" VerticalAlignment="Center" Foreground="White"/>
-                                        <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding KeyBindingTypes}" SelectedItem="{Binding MapButtonType}" Height="28"/>
+                        <!-- Sol Tuş (Left) -->
+                        <Border Width="36" Height="36" CornerRadius="18" Background="#AA1E1E1E" BorderBrush="#00FFCC" BorderThickness="1.5"
+                                HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0">
+                            <TextBlock Text="{Binding LeftKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
 
-                                        <TextBlock Grid.Row="2" Text="Hedef:" VerticalAlignment="Center" Foreground="White"/>
-                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding MapTargetCoord}" Height="28"/>
-                                    </Grid>
-                                    <Grid ColumnDefinitions="*, *" ColumnSpacing="5">
-                                        <Button Content="Ekle/Güncelle" Classes="success" Command="{Binding AddKeyBindingCommand}" Height="30"/>
-                                        <Button Grid.Column="1" Content="Sil" Classes="danger" Command="{Binding RemoveKeyBindingCommand}" Height="30"/>
-                                    </Grid>
-                                    <ListBox Height="220" ItemsSource="{Binding KeyBindings}" SelectedItem="{Binding SelectedKeyBinding}">
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding KeyName, StringFormat='Tuş [{0}]'}" FontFamily="Consolas" Foreground="#ff77ff"/>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
-                                </StackPanel>
-                            </ScrollViewer>
-                        </TabItem>
+                        <!-- Sağ Tuş (Right) -->
+                        <Border Width="36" Height="36" CornerRadius="18" Background="#AA1E1E1E" BorderBrush="#00FFCC" BorderThickness="1.5"
+                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <TextBlock Text="{Binding RightKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
 
-                        <!-- SEKME 2: KOORDİNATLAR -->
-                        <TabItem Header="Koordinat">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <StackPanel Spacing="8" Margin="0,5,0,0">
-                                    <TextBlock Text="Koordinat Tanımla" Classes="header"/>
+                        <!-- Alt Tuş (Down) -->
+                        <Border Width="36" Height="36" CornerRadius="18" Background="#AA1E1E1E" BorderBrush="#00FFCC" BorderThickness="1.5"
+                                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,8">
+                            <TextBlock Text="{Binding DownKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
 
-                                    <!-- Ekrandan Tıklayarak Seç Butonu -->
-                                    <Button Content="🎯 Ekrandan Seç (Tıkla)" Classes="warning" Command="{Binding StartPickingCoordinateCommand}" Height="32" Margin="0,0,0,3"/>
+        <!-- 3. MuMu Tarzı Sağ Tık Açılır Menüsü (TranslateTransform ile Piksel Hassasiyetinde Konumlandırma) -->
+        <Border IsVisible="{Binding IsContextMenuOpen}"
+                HorizontalAlignment="Left" VerticalAlignment="Top"
+                Width="160" Background="#DD242424" BorderBrush="#444" BorderThickness="1" CornerRadius="6" Padding="6"
+                ZIndex="1000">
+            <Border.RenderTransform>
+                <TranslateTransform X="{Binding ContextMenuX}" Y="{Binding ContextMenuY}"/>
+            </Border.RenderTransform>
+            <StackPanel Spacing="4">
+                <TextBlock Text="Tuş Ekle" Foreground="#888" FontSize="11" FontWeight="Bold" Margin="4,2"/>
+                <Button Content="➕ Tap (Dokunma) Ekle" Classes="primary" HorizontalAlignment="Stretch" Command="{Binding AddTapFromContextMenuCommand}"/>
+                <Button Content="🎮 Joystick (WASD) Ekle" Classes="neutral" HorizontalAlignment="Stretch" Command="{Binding AddJoystickFromContextMenuCommand}"/>
+            </StackPanel>
+        </Border>
 
-                                    <Grid ColumnDefinitions="50, *" RowDefinitions="Auto, Auto, Auto" Margin="0,0,0,5">
-                                        <TextBlock Text="İsim:" VerticalAlignment="Center" Foreground="White"/>
-                                        <TextBox Grid.Column="1" Text="{Binding CoordName}" Height="28"/>
+        <!-- 4. MuMu Tarzı Sağ Kenara Sabitlenmiş Dikey Araç Çubuğu (Sidebar) -->
+        <Border HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                Background="#DD1E1E1E" BorderBrush="#333333" BorderThickness="1,0,0,0"
+                Padding="6,15,6,10" Width="52">
+            <StackPanel Spacing="15" HorizontalAlignment="Center">
 
-                                        <TextBlock Grid.Row="1" Text="X:" VerticalAlignment="Center" Foreground="White"/>
-                                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CoordX}" Height="28"/>
+                <!-- Tuş Atama / Düzenleme Modu Butonu (F12 Kısayolu) -->
+                <Button Content="⌨" ToolTip.Tip="Tuş Atama Modunu Aç/Kapat (F12)"
+                        Classes="primary" Width="38" Height="38" FontSize="16"
+                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                        Command="{Binding TogglePanelCommand}"/>
 
-                                        <TextBlock Grid.Row="2" Text="Y:" VerticalAlignment="Center" Foreground="White"/>
-                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding CoordY}" Height="28"/>
-                                    </Grid>
-                                    <Grid ColumnDefinitions="*, *" ColumnSpacing="5">
-                                        <Button Content="Ekle" Classes="success" Command="{Binding AddCoordinateCommand}" Height="30"/>
-                                        <Button Grid.Column="1" Content="Sil" Classes="danger" Command="{Binding RemoveCoordinateCommand}" Height="30"/>
-                                    </Grid>
-                                    <ListBox Height="160" ItemsSource="{Binding Coordinates}" SelectedItem="{Binding SelectedCoordinate}">
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding DisplayText}" FontFamily="Consolas" Foreground="Cyan"/>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
-                                </StackPanel>
-                            </ScrollViewer>
-                        </TabItem>
+                <Separator Background="#444" Height="1" Margin="2,0"/>
 
-                        <!-- SEKME 3: MAKRO & PROFİL & KONTROL -->
-                        <TabItem Header="Makro &amp; Profil">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <StackPanel Spacing="8" Margin="0,5,0,0">
-                                    <!-- Profil İşlemleri -->
-                                    <TextBlock Text="Profil Yönetimi" Classes="header"/>
-                                    <Grid ColumnDefinitions="*, *" ColumnSpacing="5">
-                                        <Button Content="Profili Kaydet" Classes="primary" Click="OnSaveProfileClick" Height="30"/>
-                                        <Button Grid.Column="1" Content="Profil Yükle" Classes="primary" Click="OnLoadProfileClick" Height="30"/>
-                                    </Grid>
+                <!-- Koordinat Seçim Aracı -->
+                <Button Content="🎯" ToolTip.Tip="Koordinat Seç"
+                        Classes="neutral" Width="38" Height="38" FontSize="14"
+                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                        Command="{Binding StartPickingCoordinateCommand}"/>
 
-                                    <!-- Başlat / Durdur Butonları (Makro Bölümünün İçinde) -->
-                                    <TextBlock Text="Otomasyon Kontrolü" Classes="header" Margin="0,5,0,0"/>
-                                    <Grid ColumnDefinitions="*, *" ColumnSpacing="5">
-                                        <Button Grid.Column="0" Content="Başlat" Classes="success" Command="{Binding StartCommand}" IsEnabled="{Binding !IsRunning}" Height="32"/>
-                                        <Button Grid.Column="1" Content="Durdur" Classes="danger" Command="{Binding StopCommand}" IsEnabled="{Binding IsRunning}" Height="32"/>
-                                    </Grid>
+                <!-- Ayarlar -->
+                <Button Content="⚙" ToolTip.Tip="Ayarlar"
+                        Classes="neutral" Width="38" Height="38" FontSize="14"
+                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
 
-                                    <!-- Geri Sayım Kutusu -->
-                                    <Border BorderBrush="#444444" BorderThickness="1" CornerRadius="4" Padding="8" Background="#1f1f1f">
-                                        <StackPanel Spacing="3">
-                                            <CheckBox Content="Geri sayım sonunda makro dursun" IsChecked="{Binding EnableCountdown}" Foreground="White" FontSize="11"/>
-                                            <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,2,0,0">
-                                                <TextBlock Text="Süre:" VerticalAlignment="Center" Foreground="White" FontSize="11"/>
-                                                <TextBox Text="{Binding CdHours}" Width="35" Height="26" HorizontalContentAlignment="Center" IsEnabled="{Binding CanEditCountdown}"/>
-                                                <TextBlock Text=":" VerticalAlignment="Center" Foreground="White"/>
-                                                <TextBox Text="{Binding CdMinutes}" Width="35" Height="26" HorizontalContentAlignment="Center" IsEnabled="{Binding CanEditCountdown}"/>
-                                                <TextBlock Text=":" VerticalAlignment="Center" Foreground="White"/>
-                                                <TextBox Text="{Binding CdSeconds}" Width="35" Height="26" HorizontalContentAlignment="Center" IsEnabled="{Binding CanEditCountdown}"/>
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Border>
+            </StackPanel>
+        </Border>
 
-                                    <!-- Makro Komut Ekleme ve Listesi -->
-                                    <TextBlock Text="Komut Sırası" Classes="header" Margin="0,5,0,0"/>
-                                    <Grid ColumnDefinitions="50, *" RowDefinitions="Auto, Auto" Margin="0,0,0,3">
-                                        <TextBlock Text="Tip:" VerticalAlignment="Center" Foreground="White"/>
-                                        <ComboBox Grid.Column="1" ItemsSource="{Binding CmdTypes}" SelectedItem="{Binding CmdType}" Height="28"/>
-
-                                        <TextBlock Grid.Row="1" Text="Değer:" VerticalAlignment="Center" Foreground="White"/>
-                                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CmdValue}" Height="28"/>
-                                    </Grid>
-                                    <Button Content="Komutu Sıraya Ekle" Classes="primary" Command="{Binding AddCommandCommand}" Height="30"/>
-
-                                    <ListBox Height="110" ItemsSource="{Binding Commands}" SelectedItem="{Binding SelectedCommand}">
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding Description}" FontFamily="Consolas" Foreground="#ffcc00"/>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
-
-                                    <Grid ColumnDefinitions="*, *" ColumnSpacing="5">
-                                        <Button Content="▲ Yukarı" Classes="neutral" Command="{Binding MoveCommandUpCommand}" Height="28"/>
-                                        <Button Grid.Column="1" Content="▼ Aşağı" Classes="neutral" Command="{Binding MoveCommandDownCommand}" Height="28"/>
-                                    </Grid>
-                                    <Button Content="Seçili Komutu Sil" Classes="danger" Command="{Binding RemoveCommandCommand}" Height="28"/>
-                                </StackPanel>
-                            </ScrollViewer>
-                        </TabItem>
-
-                    </TabControl>
-
-                </Grid>
+        <!-- 5. Bilgi Bandı (Sadece Düzenleme Modu Aktifken) -->
+        <StackPanel VerticalAlignment="Top" HorizontalAlignment="Center" Spacing="5" Margin="0,15,0,0" ZIndex="999">
+            <Border Background="#CC0066FF" IsVisible="{Binding IsPanelOpen}" Padding="15,6" CornerRadius="6">
+                <TextBlock Text="💡 Düzenleme Modu Açık (F12): Sağ tıklayarak menü açabilir, tuşları veya joystick'i sürükleyebilirsiniz." Foreground="White" FontWeight="SemiBold" FontSize="12"/>
             </Border>
         </StackPanel>
-
-        <!-- 3. Koordinat Seçim Modu Aktifken Görünecek Uyarı Bandı -->
-        <Border Background="#CCFF3300" IsVisible="{Binding IsPickingCoordinate}" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,15,0,0" Padding="15,8" CornerRadius="6" ZIndex="999">
-            <TextBlock Text="🎯 Lütfen ekranda hedef noktaya sol tıklayın..." Foreground="White" FontWeight="Bold" FontSize="14"/>
-        </Border>
     </Grid>
 </Window>
