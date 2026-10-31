@@ -19,20 +19,11 @@ public enum JoystickDirection
 
 public partial class KeyBinding : ObservableObject
 {
-    [ObservableProperty]
-    private string _keyName = "F";
-
-    [ObservableProperty]
-    private KeyBindingType _type = KeyBindingType.Tap;
-
-    [ObservableProperty]
-    private int _x, _y, _radius;
-
-    [ObservableProperty]
-    private JoystickDirection _direction;
-
-    [ObservableProperty]
-    private bool _isPressed;
+    [ObservableProperty] private string _keyName = "F";
+    [ObservableProperty] private KeyBindingType _type = KeyBindingType.Tap;
+    [ObservableProperty] private int _x = 100;
+    [ObservableProperty] private int _y = 100;
+    [ObservableProperty] private bool _isPressed;
 }
 
 public partial class JoystickGroup : ObservableObject

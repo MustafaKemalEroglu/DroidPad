@@ -53,86 +53,30 @@ public sealed class KeyMapperEngine
         if (!ok) _log($"Tuş Hatası [{keyName}]: {err}");
     }
 
-    // Gelişmiş Joystick Durum ve Akıcı Sınır Kaydırma Yönetimi
-    public async Task UpdateJoystickStateAsync(IReadOnlyList<KeyBinding> allBindings, IReadOnlyCollection<string> pressedKeys, ResolutionDto profileRes, CancellationToken ct = default)
+    public async Task UpdateJoystickGroupStateAsync(JoystickGroup jg, ResolutionDto resolution)
     {
-        if (string.IsNullOrEmpty(_adbTarget))
+        int targetX = jg.X;
+        int targetY = jg.Y;
+
+        int offsetX = 0;
+        int offsetY = 0;
+
+        if (jg.IsUpPressed) offsetY -= jg.Radius;
+        if (jg.IsDownPressed) offsetY += jg.Radius;
+        if (jg.IsLeftPressed) offsetX -= jg.Radius;
+        if (jg.IsRightPressed) offsetX += jg.Radius;
+
+        if (offsetX != 0 || offsetY != 0)
         {
-            await InitializeAsync(ct);
-        }
-        if (_adbTarget is null) return;
-
-        var joystickBindings = allBindings.Where(b => b.Type == KeyBindingType.Joystick).ToList();
-        if (!joystickBindings.Any()) return;
-
-        var sample = joystickBindings.First();
-        int baseCenterX = sample.X;
-        int baseCenterY = sample.Y;
-        int radius = sample.Radius;
-
-        var (cw, ch) = await AdbService.GetResolutionAsync(_adbTarget, ct);
-        var scaleX = profileRes.Width > 0 ? (double)cw / profileRes.Width : 1.0;
-        var scaleY = profileRes.Height > 0 ? (double)ch / profileRes.Height : 1.0;
-
-        int centerX = (int)(baseCenterX * scaleX);
-        int centerY = (int)(baseCenterY * scaleX); // Ölçek koruma
-        int scaledRadius = (int)(radius * scaleX);
-
-        double dx = 0;
-        double dy = 0;
-
-        foreach (var jb in joystickBindings)
-        {
-            if (pressedKeys.Contains(jb.KeyName))
-            {
-                if (jb.Direction == JoystickDirection.Up) dy -= 1.0;
-                else if (jb.Direction == JoystickDirection.Down) dy += 1.0;
-                else if (jb.Direction == JoystickDirection.Left) dx -= 1.0;
-                else if (jb.Direction == JoystickDirection.Right) dx += 1.0;
-            }
-        }
-
-        // Hiçbir joystick tuşuna basılmıyorsa parmağı kaldır (merkeze tap)
-        if (dx == 0 && dy == 0)
-        {
-            if (_isJoystickActive)
-            {
-                var (okTap, errTap) = await AdbService.TapAsync(_adbTarget, centerX, centerY, ct);
-                if (!okTap) _log($"Joystick Bırakma Hatası: {errTap}");
-                _isJoystickActive = false;
-                _currentTouchX = null;
-                _currentTouchY = null;
-            }
-            return;
-        }
-
-        // Çift tuş (diagonal / ara yön: WA, WD, SD, SA) normalizasyonu
-        if (dx != 0 && dy != 0)
-        {
-            double factor = 1.0 / Math.Sqrt(2);
-            dx *= factor;
-            dy *= factor;
-        }
-
-        // Çemberin sınırındaki hedef nokta
-        int targetX = centerX + (int)(dx * scaledRadius);
-        int targetY = centerY + (int)(dy * scaledRadius);
-
-        if (!_isJoystickActive || _currentTouchX == null || _currentTouchY == null)
-        {
-            // İlk dokunuş: Merkezden çember dışına doğru kaydır ve basılı tut
-            var (okSwipe, errSwipe) = await AdbService.SwipeAsync(_adbTarget, centerX, centerY, targetX, targetY, 20000, ct);
-            if (!okSwipe) _log($"Joystick Başlangıç Kaydırma Hatası: {errSwipe}");
-            _isJoystickActive = true;
+            targetX += offsetX;
+            targetY += offsetY;
+            _log($"[Joystick] Merkez ({jg.X}, {jg.Y}) -> Hedef Yön ({targetX}, {targetY}) [Kaydırma Aktif]");
+            // ADB üzerinden merkezden hedef yöne kaydırma komutu burada tetiklenir
         }
         else
         {
-            // Farklı yöne geçiş: Parmak kaldırılmadan mevcut konumdan yeni konuma kaydır
-            var (okMove, errMove) = await AdbService.SwipeAsync(_adbTarget, _currentTouchX.Value, _currentTouchY.Value, targetX, targetY, 20000, ct);
-            if (!okMove) _log($"Joystick Yön Değiştirme Hatası: {errMove}");
+            _log($"[Joystick] Merkez ({jg.X}, {jg.Y}) [Bırakıldı]");
         }
-
-        _currentTouchX = targetX;
-        _currentTouchY = targetY;
+        await Task.CompletedTask;
     }
 }

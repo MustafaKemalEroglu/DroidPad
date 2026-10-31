@@ -1,5 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Threading;
@@ -20,16 +24,36 @@ public partial class MainWindowViewModel : ObservableObject
         PropertyNameCaseInsensitive = true
     };
 
-    // --- Sorumluluk Yöneticileri (Managers) ---
+    // --- Sorumluluk Yöneticileri (Managers & State) ---
     private readonly CoordinateManager _coordManager = new();
     private readonly KeyMappingManager _keyMappingManager = new();
     private readonly MacroManager _macroManager = new();
     private readonly ProfileManager _profileManager;
     private readonly AutomationManager _automationManager;
+    private readonly KeyInputManager _keyInputManager;
 
-    private readonly KeyMapperEngine _keyMapperEngine;
-    private readonly HashSet<string> _activePressedKeys = new();
-    private KeyBinding? _waitingForKeyBinding;
+    // UI Durum Nesnesi (EditorState)
+    public EditorState State { get; } = new();
+
+    // --- XAML Uyumluluğu İçin Forwarding (Köprü) Özellikleri ---
+    public bool IsPanelOpen { get => State.IsPanelOpen; set => State.IsPanelOpen = value; }
+    public bool IsRunning { get => State.IsRunning; set => State.IsRunning = value; }
+    public bool IsPickingCoordinate { get => State.IsPickingCoordinate; set => State.IsPickingCoordinate = value; }
+    public string CoordName { get => State.CoordName; set => State.CoordName = value; }
+    public string CoordX { get => State.CoordX; set => State.CoordX = value; }
+    public string CoordY { get => State.CoordY; set => State.CoordY = value; }
+    public string CmdType { get => State.CmdType; set => State.CmdType = value; }
+    public string CmdValue { get => State.CmdValue; set => State.CmdValue = value; }
+    public Coordinate? SelectedCoordinate { get => State.SelectedCoordinate; set => State.SelectedCoordinate = value; }
+    public MacroCommand? SelectedCommand { get => State.SelectedCommand; set => State.SelectedCommand = value; }
+    public KeyBinding? SelectedKeyBinding { get => State.SelectedKeyBinding; set => State.SelectedKeyBinding = value; }
+    public bool IsContextMenuOpen { get => State.IsContextMenuOpen; set => State.IsContextMenuOpen = value; }
+    public double ContextMenuX { get => State.ContextMenuX; set => State.ContextMenuX = value; }
+    public double ContextMenuY { get => State.ContextMenuY; set => State.ContextMenuY = value; }
+    public List<string> JoystickPresets { get => State.JoystickPresets; set => State.JoystickPresets = value; }
+    public string JoystickPreset { get => State.JoystickPreset; set => State.JoystickPreset = value; }
+    public int JoystickRadius { get => State.JoystickRadius; set => State.JoystickRadius = value; }
+    public string NewTapKey { get => State.NewTapKey; set => State.NewTapKey = value; }
 
     // --- UI Koleksiyon Köprüleri ---
     public ObservableCollection<Coordinate> Coordinates => _coordManager.Coordinates;
@@ -37,19 +61,6 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<JoystickGroup> JoystickGroups => _keyMappingManager.JoystickGroups;
     public ObservableCollection<MacroCommand> Commands => _macroManager.Commands;
     public ObservableCollection<string> LogLines { get; } = new();
-
-    // --- UI State Özellikleri ---
-    [ObservableProperty] private bool _isPanelOpen;
-    [ObservableProperty] private bool _isRunning;
-    [ObservableProperty] private string _coordName = "TargetClick";
-    [ObservableProperty] private string _coordX = "1690";
-    [ObservableProperty] private string _coordY = "877";
-    [ObservableProperty] private string _cmdType = "click";
-    [ObservableProperty] private string _cmdValue = "TargetClick";
-    [ObservableProperty] private Coordinate? _selectedCoordinate;
-    [ObservableProperty] private MacroCommand? _selectedCommand;
-    [ObservableProperty] private KeyBinding? _selectedKeyBinding;
-    [ObservableProperty] private bool _isPickingCoordinate;
 
     // --- Geri Sayım (Countdown) State Alanları ---
     public bool EnableCountdown
@@ -80,19 +91,6 @@ public partial class MainWindowViewModel : ObservableObject
     public string MiniCountdownText => _automationManager.MiniCountdownText;
     public bool CanEditCountdown => _automationManager.CanEditCountdown;
 
-    // --- Sağ Tık Popup Menü State Alanları ---
-    [ObservableProperty] private bool _isContextMenuOpen;
-    [ObservableProperty] private double _contextMenuX;
-    [ObservableProperty] private double _contextMenuY;
-    private double _lastRightClickX;
-    private double _lastRightClickY;
-
-    // --- Joystick ve Tap Ayarları ---
-    [ObservableProperty] private List<string> _joystickPresets = new() { "WASD", "Yön Tuşları (Arrows)", "Numpad (8462)" };
-    [ObservableProperty] private string _joystickPreset = "WASD";
-    [ObservableProperty] private int _joystickRadius = 80;
-    [ObservableProperty] private string _newTapKey = "F";
-
     public ResolutionDto ProfileResolution { get; } = new();
     public string[] KeyBindingTypes { get; } = { "tap", "joystick" };
     public string[] CmdTypes { get; } = { "click", "swipe", "wait", "random_wait", "key", "loop_start", "loop_end" };
@@ -102,10 +100,15 @@ public partial class MainWindowViewModel : ObservableObject
     public MainWindowViewModel()
     {
         var engine = new MacroEngine(Log);
-        _keyMapperEngine = new KeyMapperEngine(Log);
+        var keyMapperEngine = new KeyMapperEngine(Log);
 
         _profileManager = new ProfileManager(_coordManager, _keyMappingManager, _macroManager, JsonOptions);
         _automationManager = new AutomationManager(engine, Log);
+        _keyInputManager = new KeyInputManager(keyMapperEngine, Log);
+
+        // EditorState içinde değişen her property'yi ViewModel üzerinden arayüze bildir
+        State.PropertyChanged += (s, e) => OnPropertyChanged(e.PropertyName);
+
         _automationManager.StateChanged += () =>
         {
             IsRunning = _automationManager.IsRunning;
@@ -151,8 +154,6 @@ public partial class MainWindowViewModel : ObservableObject
     // --- Sağ Tık Menü ve Dinleme ---
     public void OpenContextMenu(double x, double y)
     {
-        _lastRightClickX = x;
-        _lastRightClickY = y;
         ContextMenuX = x;
         ContextMenuY = y;
         IsContextMenuOpen = true;
@@ -166,44 +167,22 @@ public partial class MainWindowViewModel : ObservableObject
         {
             KeyName = "...",
             Type = KeyBindingType.Tap,
-            X = (int)_lastRightClickX,
-            Y = (int)_lastRightClickY
+            X = (int)ContextMenuX,
+            Y = (int)ContextMenuY
         };
         KeyBindings.Add(newBinding);
-        StartWaitingForKey(newBinding);
+        _keyInputManager.StartWaitingForKey(newBinding);
     }
 
     [RelayCommand]
     private void AddJoystickFromContextMenu()
     {
         IsContextMenuOpen = false;
-        _keyMappingManager.AddJoystickGroup("WASD", JoystickRadius, _lastRightClickX.ToString(), _lastRightClickY.ToString(), Log);
+        _keyMappingManager.AddJoystickGroup("WASD", JoystickRadius, ContextMenuX.ToString(), ContextMenuY.ToString(), Log);
     }
 
-    public void StartWaitingForKey(KeyBinding binding)
-    {
-        _waitingForKeyBinding = binding;
-        binding.KeyName = "...";
-        Log($"⌨️ '{binding.Type}' için yeni tuşa basın...");
-    }
-
-    public bool HandleKeyAssignment(KeyEventArgs e)
-    {
-        if (_waitingForKeyBinding != null)
-        {
-            var keyStr = e.Key.ToString();
-            if (keyStr.StartsWith("D") && keyStr.Length == 2 && char.IsDigit(keyStr[1]))
-            {
-                keyStr = keyStr[1].ToString();
-            }
-
-            _waitingForKeyBinding.KeyName = keyStr.ToUpper();
-            Log($"✅ Yeni tuş atandı: {keyStr.ToUpper()}");
-            _waitingForKeyBinding = null;
-            return true;
-        }
-        return false;
-    }
+    public void StartWaitingForKey(KeyBinding binding) => _keyInputManager.StartWaitingForKey(binding);
+    public bool HandleKeyAssignment(KeyEventArgs e) => _keyInputManager.HandleKeyAssignment(e);
 
     // --- Makro Çalıştırma & Durdurma ---
     [RelayCommand(CanExecute = nameof(CanStart))]
@@ -220,10 +199,7 @@ public partial class MainWindowViewModel : ObservableObject
     private bool CanStart() => !IsRunning;
 
     [RelayCommand(CanExecute = nameof(CanStop))]
-    private void Stop()
-    {
-        _automationManager.Stop();
-    }
+    private void Stop() => _automationManager.Stop();
     private bool CanStop() => IsRunning;
 
     [RelayCommand] private void OpenMiniWindow() => MiniWindowRequested?.Invoke();
@@ -250,29 +226,8 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     // --- Klavye Dinleyicileri ---
-    public async Task OnKeyPressedAsync(string keyName)
-    {
-        if (_activePressedKeys.Contains(keyName)) return;
-        _activePressedKeys.Add(keyName);
-
-        var binding = KeyBindings.FirstOrDefault(b => b.KeyName.Equals(keyName, StringComparison.OrdinalIgnoreCase));
-        if (binding != null) binding.IsPressed = true;
-
-        if (binding?.Type == KeyBindingType.Joystick)
-            await _keyMapperEngine.UpdateJoystickStateAsync(KeyBindings.ToList(), _activePressedKeys, ProfileResolution);
-        else if (binding?.Type == KeyBindingType.Tap)
-            await _keyMapperEngine.HandleKeyPressAsync(keyName, KeyBindings.ToList(), ProfileResolution);
-    }
-
-    public async Task OnKeyReleasedAsync(string keyName)
-    {
-        _activePressedKeys.Remove(keyName);
-        var binding = KeyBindings.FirstOrDefault(b => b.KeyName.Equals(keyName, StringComparison.OrdinalIgnoreCase));
-        if (binding != null) binding.IsPressed = false;
-
-        if (binding?.Type == KeyBindingType.Joystick)
-            await _keyMapperEngine.UpdateJoystickStateAsync(KeyBindings.ToList(), _activePressedKeys, ProfileResolution);
-    }
+    public async Task OnKeyPressedAsync(string keyName) => await _keyInputManager.OnKeyPressedAsync(keyName, KeyBindings, JoystickGroups, ProfileResolution);
+    public async Task OnKeyReleasedAsync(string keyName) => await _keyInputManager.OnKeyReleasedAsync(keyName, KeyBindings, JoystickGroups, ProfileResolution);
 
     // --- Loglama Yardımcısı ---
     private void Log(string message)

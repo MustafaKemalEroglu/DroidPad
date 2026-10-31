@@ -4,18 +4,17 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using WaydroidController.Models;
 using WaydroidController.ViewModels;
+using KeyBinding = WaydroidController.Models.KeyBinding;
 
 namespace WaydroidController.Views;
 
 public partial class OverlayWindow : Window
 {
-    // Tap Tuşu Sürükleme State Alanları
-    private WaydroidController.Models.KeyBinding? _draggedBinding;
+    private KeyBinding? _draggedBinding;
     private Point _tapPressPoint;
     private Point _tapInitialCoord;
     private bool _tapHasMoved = false;
 
-    // Joystick Sürükleme State Alanları
     private JoystickGroup? _draggedJoystickGroup;
     private Point _joystickPressPoint;
     private Point _joystickInitialCoord;
@@ -42,7 +41,6 @@ public partial class OverlayWindow : Window
         if (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox)
             return;
 
-        // Tuş atama (dinleme) modu aktifse basılan tuşu ata
         if (vm.HandleKeyAssignment(e))
         {
             e.Handled = true;
@@ -69,26 +67,26 @@ public partial class OverlayWindow : Window
         base.OnPointerPressed(e);
         if (DataContext is not MainWindowViewModel vm) return;
 
-        if (vm.IsContextMenuOpen)
+        if (vm.State.IsContextMenuOpen)
         {
-            vm.IsContextMenuOpen = false;
+            vm.State.IsContextMenuOpen = false;
         }
 
         var point = e.GetPosition(this);
         var properties = e.GetCurrentPoint(this).Properties;
 
-        if (vm.IsPanelOpen && properties.IsRightButtonPressed)
+        if (vm.State.IsPanelOpen && properties.IsRightButtonPressed)
         {
             vm.OpenContextMenu(point.X, point.Y);
             e.Handled = true;
         }
     }
 
-    // --- Tap Tuşu Sürükleme ve Tıklama (Düzenleme) Yönetimi ---
+    // --- Tap Tuşu Sürükleme ve Tıklama (Tuş Atama) Yönetimi ---
     private void OnKeyBadgePointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel vm || !vm.IsPanelOpen) return;
-        if (sender is Border border && border.Tag is WaydroidController.Models.KeyBinding binding)
+        if (DataContext is not MainWindowViewModel vm || !vm.State.IsPanelOpen) return;
+        if (sender is Border border && border.Tag is KeyBinding binding)
         {
             var properties = e.GetCurrentPoint(this).Properties;
             if (properties.IsLeftButtonPressed)
@@ -106,12 +104,13 @@ public partial class OverlayWindow : Window
 
     private void OnKeyBadgePointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_draggedBinding == null || DataContext is not MainWindowViewModel vm || !vm.IsPanelOpen) return;
+        if (_draggedBinding == null || DataContext is not MainWindowViewModel vm || !vm.State.IsPanelOpen) return;
 
         var currentPoint = e.GetPosition(this);
         var diff = currentPoint - _tapPressPoint;
 
-        if (Math.Abs(diff.X) > 3 || Math.Abs(diff.Y) > 3)
+        // Eşik 8 piksele çıkarıldı: Tıklama esnasındaki mikro titremelerin sürükleme sanılması engellendi
+        if (Math.Abs(diff.X) > 8 || Math.Abs(diff.Y) > 8)
         {
             _tapHasMoved = true;
         }
@@ -131,8 +130,8 @@ public partial class OverlayWindow : Window
         {
             e.Pointer.Capture(null);
 
-            // Hareket etmediyse bu bir tıklamadır -> Tuş düzenleme (dinleme) modunu başlat
-            if (!_tapHasMoved && DataContext is MainWindowViewModel vm && vm.IsPanelOpen)
+            // Eğer hareket eşiği aşılmadıysa bu bir tıklamadır -> Tuş atama modunu (...) başlat
+            if (!_tapHasMoved && DataContext is MainWindowViewModel vm && vm.State.IsPanelOpen)
             {
                 vm.StartWaitingForKey(_draggedBinding);
             }
@@ -143,10 +142,10 @@ public partial class OverlayWindow : Window
         }
     }
 
-    // --- Çember Joystick Sürükleme Yönetimi ---
+    // --- Joystick Sürükleme Yönetimi ---
     private void OnJoystickPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel vm || !vm.IsPanelOpen) return;
+        if (DataContext is not MainWindowViewModel vm || !vm.State.IsPanelOpen) return;
         if (sender is Grid grid && grid.Tag is JoystickGroup joystick)
         {
             var properties = e.GetCurrentPoint(this).Properties;
@@ -164,7 +163,7 @@ public partial class OverlayWindow : Window
 
     private void OnJoystickPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_draggedJoystickGroup == null || DataContext is not MainWindowViewModel vm || !vm.IsPanelOpen) return;
+        if (_draggedJoystickGroup == null || DataContext is not MainWindowViewModel vm || !vm.State.IsPanelOpen) return;
 
         var currentPoint = e.GetPosition(this);
         var diff = currentPoint - _joystickPressPoint;

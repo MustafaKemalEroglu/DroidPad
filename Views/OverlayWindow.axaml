@@ -14,9 +14,9 @@
 
     <Grid>
         <!-- 0. Düzenleme Modu Aktifken Arka Planı Hafif Karartan Perde -->
-        <Border Background="#44000000" IsVisible="{Binding IsPanelOpen}" IsHitTestVisible="False"/>
+        <Border Background="#44000000" IsVisible="{Binding State.IsPanelOpen}" IsHitTestVisible="False"/>
 
-        <!-- 1. Ekran Üzerindeki Tap Tuşları (Canvas & Sürüklenebilir) -->
+        <!-- 1. Ekran Üzerindeki Tap Tuşları -->
         <ItemsControl ItemsSource="{Binding KeyBindings}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
@@ -55,15 +55,17 @@
                             </Style>
                         </Border.Styles>
 
+                        <!-- IsHitTestVisible="False" eklendi -->
                         <TextBlock Text="{Binding KeyName}" Foreground="#FFFFFF"
                                    FontFamily="Consolas" FontSize="14" FontWeight="Bold"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   IsHitTestVisible="False"/>
                     </Border>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <!-- 2. Ekran Üzerindeki Çember Joystick Grupları (Canvas & Tek Parça Sürüklenebilir) -->
+        <!-- 2. Ekran Üzerindeki Çember Joystick Grupları -->
         <ItemsControl ItemsSource="{Binding JoystickGroups}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
@@ -90,43 +92,44 @@
 
                         <!-- Dış Çember -->
                         <Ellipse Width="140" Height="140"
-                                 Stroke="#00FFCC" StrokeThickness="2" Fill="#221E1E1E"/>
+                                 Stroke="#00FFCC" StrokeThickness="2" Fill="#221E1E1E"
+                                 IsHitTestVisible="False"/>
 
                         <!-- Üst Tuş (Up) -->
                         <Border Width="36" Height="36" CornerRadius="18" Background="#AA1E1E1E" BorderBrush="#00FFCC" BorderThickness="1.5"
-                                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0">
-                            <TextBlock Text="{Binding UpKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0" IsHitTestVisible="False">
+                            <TextBlock Text="{Binding UpKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>
                         </Border>
 
                         <!-- Sol Tuş (Left) -->
                         <Border Width="36" Height="36" CornerRadius="18" Background="#AA1E1E1E" BorderBrush="#00FFCC" BorderThickness="1.5"
-                                HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0">
-                            <TextBlock Text="{Binding LeftKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0" IsHitTestVisible="False">
+                            <TextBlock Text="{Binding LeftKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>
                         </Border>
 
                         <!-- Sağ Tuş (Right) -->
                         <Border Width="36" Height="36" CornerRadius="18" Background="#AA1E1E1E" BorderBrush="#00FFCC" BorderThickness="1.5"
-                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
-                            <TextBlock Text="{Binding RightKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0" IsHitTestVisible="False">
+                            <TextBlock Text="{Binding RightKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>
                         </Border>
 
                         <!-- Alt Tuş (Down) -->
                         <Border Width="36" Height="36" CornerRadius="18" Background="#AA1E1E1E" BorderBrush="#00FFCC" BorderThickness="1.5"
-                                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,8">
-                            <TextBlock Text="{Binding DownKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,8" IsHitTestVisible="False">
+                            <TextBlock Text="{Binding DownKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>
                         </Border>
                     </Grid>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <!-- 3. MuMu Tarzı Sağ Tık Açılır Menüsü (TranslateTransform ile Piksel Hassasiyetinde Konumlandırma) -->
-        <Border IsVisible="{Binding IsContextMenuOpen}"
+        <!-- 3. Sağ Tık Açılır Menüsü -->
+        <Border IsVisible="{Binding State.IsContextMenuOpen}"
                 HorizontalAlignment="Left" VerticalAlignment="Top"
                 Width="160" Background="#DD242424" BorderBrush="#444" BorderThickness="1" CornerRadius="6" Padding="6"
                 ZIndex="1000">
             <Border.RenderTransform>
-                <TranslateTransform X="{Binding ContextMenuX}" Y="{Binding ContextMenuY}"/>
+                <TranslateTransform X="{Binding State.ContextMenuX}" Y="{Binding State.ContextMenuY}"/>
             </Border.RenderTransform>
             <StackPanel Spacing="4">
                 <TextBlock Text="Tuş Ekle" Foreground="#888" FontSize="11" FontWeight="Bold" Margin="4,2"/>
@@ -135,13 +138,12 @@
             </StackPanel>
         </Border>
 
-        <!-- 4. MuMu Tarzı Sağ Kenara Sabitlenmiş Dikey Araç Çubuğu (Sidebar) -->
+        <!-- 4. Dikey Araç Çubuğu (Sidebar) -->
         <Border HorizontalAlignment="Right" VerticalAlignment="Stretch"
                 Background="#DD1E1E1E" BorderBrush="#333333" BorderThickness="1,0,0,0"
                 Padding="6,15,6,10" Width="52">
             <StackPanel Spacing="15" HorizontalAlignment="Center">
 
-                <!-- Tuş Atama / Düzenleme Modu Butonu (F12 Kısayolu) -->
                 <Button Content="⌨" ToolTip.Tip="Tuş Atama Modunu Aç/Kapat (F12)"
                         Classes="primary" Width="38" Height="38" FontSize="16"
                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
@@ -149,13 +151,11 @@
 
                 <Separator Background="#444" Height="1" Margin="2,0"/>
 
-                <!-- Koordinat Seçim Aracı -->
                 <Button Content="🎯" ToolTip.Tip="Koordinat Seç"
                         Classes="neutral" Width="38" Height="38" FontSize="14"
                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                         Command="{Binding StartPickingCoordinateCommand}"/>
 
-                <!-- Ayarlar -->
                 <Button Content="⚙" ToolTip.Tip="Ayarlar"
                         Classes="neutral" Width="38" Height="38" FontSize="14"
                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
@@ -163,9 +163,9 @@
             </StackPanel>
         </Border>
 
-        <!-- 5. Bilgi Bandı (Sadece Düzenleme Modu Aktifken) -->
+        <!-- 5. Bilgi Bandı -->
         <StackPanel VerticalAlignment="Top" HorizontalAlignment="Center" Spacing="5" Margin="0,15,0,0" ZIndex="999">
-            <Border Background="#CC0066FF" IsVisible="{Binding IsPanelOpen}" Padding="15,6" CornerRadius="6">
+            <Border Background="#CC0066FF" IsVisible="{Binding State.IsPanelOpen}" Padding="15,6" CornerRadius="6">
                 <TextBlock Text="💡 Düzenleme Modu Açık (F12): Sağ tıklayarak menü açabilir, tuşları veya joystick'i sürükleyebilirsiniz." Foreground="White" FontWeight="SemiBold" FontSize="12"/>
             </Border>
         </StackPanel>
