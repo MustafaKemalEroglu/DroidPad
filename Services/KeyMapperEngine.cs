@@ -102,7 +102,7 @@ public class KeyMapperEngine
         if (windowWidth <= 0 || windowHeight <= 0) return;
 
         // Waydroid'in o anki gerçek çözünürlüğünü ADB'den al (yanlış profile resolution ihtimalini sıfırla)
-        ResolutionDto resolution = await AdbService.GetWaydroidResolutionAsync(fallbackResolution);
+        ResolutionDto resolution = await AdbService.GetResolutionAsync();
 
         double scaleX = (double)resolution.Width / windowWidth;
         double scaleY = (double)resolution.Height / windowHeight;

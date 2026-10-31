@@ -1,285 +1,271 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
 using WaydroidController.Models;
 
-namespace WaydroidController.Services
+namespace WaydroidController.Services;
+
+public static class AdbService
 {
-    public static class AdbService
+    #region Değişkenler ve Sabitler
+    private static Process? _shellProcess;
+    private static readonly object _writeLock = new();   // Yazma işlemleri için kilit
+    private static readonly object _connectLock = new(); // Bağlantı işlemleri için kilit
+    private static bool _isConnecting;
+    private static string _activeDevice = "";
+
+    private const string DefaultWaydroidIp = "192.168.240.112:5555";
+    private static readonly string[] SizeSeparators = { "size:", "Size:" };
+    #endregion
+
+    #region Bağlantı Yönetimi (Thread-Safe)
+
+    public static async Task<bool> EnsureConnectedAsync()
     {
-        private static Process? _interactiveShell;
-        private static StreamWriter? _shellInput;
-        private static string? _currentTarget;
+        if (IsConnected()) return true;
 
-        // Sürükleme başlangıcı (Parmağı ekrana basılı tut)
-        public static void SendTouchDown(string adbTarget, int x, int y)
+        lock (_connectLock)
         {
-            // Android InputManager / sendevent veya scrcpy benzeri akış için DOWN sinyali
-            SendInstantCommand(adbTarget, $"input touchscreen down {x} {y}");
+            if (_isConnecting) return false;
+            _isConnecting = true;
         }
 
-        // Sürükleme sırasında parmağın yerini güncelle (Kaldırmadan)
-        public static void SendTouchMove(string adbTarget, int x, int y)
+        try
         {
-            SendInstantCommand(adbTarget, $"input touchscreen move {x} {y}");
-        }
+            LogManager.Log("ADB Bağlantısı başlatılıyor...");
+            _activeDevice = await GetConnectedDeviceAsync();
 
-        // Sürükleme bitişi (Parmağı kaldır)
-        public static void SendTouchUp(string adbTarget, int x, int y)
-        {
-            SendInstantCommand(adbTarget, $"input touchscreen up {x} {y}");
-        }
-
-        // İnteraktif ADB kabuğunu bir kez başlatır ve açık tutar (Süreç başlatma maliyetini sıfırlar)
-        public static void EnsureInteractiveSession(string adbTarget)
-        {
-            if (_interactiveShell == null || _interactiveShell.HasExited || _currentTarget != adbTarget)
+            if (string.IsNullOrEmpty(_activeDevice))
             {
-                try
-                {
-                    _interactiveShell?.Kill();
-                }
-                catch { }
+                LogManager.Log($"Cihaz bulunamadı, bağlanmaya çalışılıyor: {DefaultWaydroidIp}");
 
-                _currentTarget = adbTarget;
-                var startInfo = new ProcessStartInfo
+                using var connectProcess = Process.Start(new ProcessStartInfo
                 {
                     FileName = "adb",
-                    Arguments = $"-s {adbTarget} shell",
-                    RedirectStandardInput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
+                    Arguments = $"connect {DefaultWaydroidIp}",
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                });
 
-                _interactiveShell = Process.Start(startInfo);
-                if (_interactiveShell != null)
-                {
-                    _shellInput = _interactiveShell.StandardInput;
-                    Console.WriteLine($"🚀 [AdbService] İnteraktif ADB oturumu başlatıldı: {adbTarget}");
-                }
+                if (connectProcess != null) await connectProcess.WaitForExitAsync();
+                _activeDevice = await GetConnectedDeviceAsync();
             }
-        }
 
-        // Komutu anında açık olan kabuğa yazar
-        public static void SendInstantCommand(string adbTarget, string command)
-        {
-            EnsureInteractiveSession(adbTarget);
-            try
+            if (string.IsNullOrEmpty(_activeDevice))
             {
-                if (_shellInput != null && !_interactiveShell!.HasExited)
-                {
-                    _shellInput.WriteLine(command);
-                    _shellInput.Flush();
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"⚠️ İnteraktif komut gönderilemedi: {ex.Message}");
-            }
-        }
-
-        // Hızlı ve akıcı Swipe (Kaydırma / Sürükleme)
-        public static void SendInstantSwipe(string adbTarget, int x1, int y1, int x2, int y2, int durationMs = 15)
-        {
-            SendInstantCommand(adbTarget, $"input swipe {x1} {y1} {x2} {y2} {durationMs}");
-        }
-
-        // Hızlı ve akıcı Tap (Dokunma)
-        public static void SendInstantTap(string adbTarget, int x, int y)
-        {
-            SendInstantCommand(adbTarget, $"input tap {x} {y}");
-        }
-
-        public static async Task<string?> FindTargetAsync(CancellationToken ct)
-        {
-            try
-            {
-                var output = await ExecuteAdbCommandAndGetOutputAsync("devices", ct);
-                if (!string.IsNullOrEmpty(output))
-                {
-                    var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    foreach (var line in lines)
-                    {
-                        if (line.EndsWith("device", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var parts = line.Split(new[] { '\t', ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                            if (parts.Length > 0 && parts[0] != "List")
-                            {
-                                return parts[0];
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
-            return null;
-        }
-
-        public static async Task TrySequentialAsyncPublicAsync(IEnumerable<IEnumerable<string>> commandGroups, CancellationToken ct)
-        {
-            foreach (var group in commandGroups)
-            {
-                foreach (var cmd in group)
-                {
-                    try
-                    {
-                        await ExecuteAdbCommandAndGetOutputAsync(cmd, ct);
-                    }
-                    catch { }
-                }
-            }
-        }
-
-        public static async Task<(int Width, int Height)> GetResolutionAsync(string adbTarget, CancellationToken ct)
-        {
-            try
-            {
-                var output = await ExecuteAdbCommandAndGetOutputAsync($"-s {adbTarget} shell wm size", ct);
-
-                if (!string.IsNullOrEmpty(output))
-                {
-                    var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    string? targetLine = null;
-
-                    // 1. ÖNCELİK: Override size (Waydroid'in aktif ölçeklendirilmiş render çözünürlüğü: 1440x786)
-                    foreach (var line in lines)
-                    {
-                        if (line.Contains("Override size:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            targetLine = line;
-                            break;
-                        }
-                    }
-
-                    // 2. Override yoksa Physical size'a bak
-                    if (targetLine == null)
-                    {
-                        foreach (var line in lines)
-                        {
-                            if (line.Contains("Physical size:", StringComparison.OrdinalIgnoreCase))
-                            {
-                                targetLine = line;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (targetLine != null)
-                    {
-                        var parts = targetLine.Split(':');
-                        if (parts.Length > 1)
-                        {
-                            var resStr = parts[1].Trim();
-                            var dim = resStr.Split('x');
-                            if (dim.Length == 2 && int.TryParse(dim[0].Trim(), out int w) && int.TryParse(dim[1].Trim(), out int h))
-                            {
-                                Console.WriteLine($"📱 [AdbService] Doğru Çözünürlük (Override) Baz Alındı: {w}x{h}");
-                                return (w, h);
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"⚠️ Çözünürlük alınırken hata oluştu: {ex.Message}");
+                LogManager.Log("HATA: Waydroid bulunamadı veya ADB bağlanamadı!", isError: true);
+                return false;
             }
 
-            return (1440, 786); // Waydroid aktif çözünürlüğü için güvenli fallback
+            LogManager.Log($"BAŞARILI: ADB Bağlantısı kuruldu -> {_activeDevice}");
+            return StartInteractiveShell();
         }
-
-        public static async Task<ResolutionDto> GetWaydroidResolutionAsync(ResolutionDto fallbackResolution, CancellationToken ct = default)
+        catch (Exception ex)
         {
-            // 1. Aktif ADB hedef cihazını dinamik olarak bul
-            var target = await FindTargetAsync(ct);
-
-            if (string.IsNullOrEmpty(target))
-            {
-                // Hedef bulunamadıysa Waydroid için TCP bağlantısını otomatik dene
-                Console.WriteLine("🔌 ADB hedefi bulunamadı, 127.0.0.1:5555 bağlantısı deneniyor...");
-                await TrySequentialAsyncPublicAsync(new[] { new[] { "connect", "127.0.0.1:5555" } }, ct);
-                await Task.Delay(500, ct);
-
-                target = await FindTargetAsync(ct) ?? "127.0.0.1:5555";
-            }
-
-            // 2. Bulunan aktif hedef üzerinden gerçek çözünürlüğü al
-            var (w, h) = await GetResolutionAsync(target, ct);
-            if (w > 0 && h > 0)
-            {
-                Console.WriteLine($"📱 [AdbService] Aktif Cihaz ({target}) Çözünürlüğü: {w}x{h}");
-                return new ResolutionDto { Width = w, Height = h };
-            }
-
-            return fallbackResolution;
+            LogManager.Log($"ADB Bağlantı Hatası: {ex.Message}", isError: true);
+            return false;
         }
-
-        public static async Task<(bool Success, string Error)> TapAsync(string adbTarget, int x, int y, CancellationToken ct)
+        finally
         {
-            return await ExecuteCommandAsync($"-s {adbTarget} shell input tap {x} {y}", ct);
+            _isConnecting = false;
         }
+    }
 
-        public static async Task<(bool Success, string Error)> SwipeAsync(string adbTarget, int x1, int y1, int x2, int y2, int durationMs, CancellationToken ct)
+    private static bool StartInteractiveShell()
+    {
+        try
         {
-            return await ExecuteCommandAsync($"-s {adbTarget} shell input touchscreen swipe {x1} {y1} {x2} {y2} {durationMs}", ct);
-        }
-
-        public static async Task<(bool Success, string Error)> KeyEventAsync(string adbTarget, string keycode, CancellationToken ct)
-        {
-            return await ExecuteCommandAsync($"-s {adbTarget} shell input keyevent {keycode}", ct);
-        }
-
-        private static async Task<string> ExecuteAdbCommandAndGetOutputAsync(string arguments, CancellationToken ct)
-        {
-            var startInfo = new ProcessStartInfo
+            var psi = new ProcessStartInfo
             {
                 FileName = "adb",
-                Arguments = arguments,
+                Arguments = $"-s {_activeDevice} shell",
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
+                RedirectStandardError = true, // Hataları yakalamak için
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
-            using var process = Process.Start(startInfo);
-            if (process == null) return string.Empty;
+            _shellProcess = new Process { StartInfo = psi };
+            _shellProcess.Start();
 
-            string output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync(ct);
-            return output.Trim();
+            // ÇOK ÖNEMLİ: Arka planda çıktıyı sürekli oku. 
+            // Eğer okumazsak, işletim sistemi tamponu dolar ve adb donar (Deadlock).
+            Task.Run(() => ReadShellOutput(_shellProcess.StandardOutput));
+            Task.Run(() => ReadShellOutput(_shellProcess.StandardError));
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogManager.Log($"Shell Başlatma Hatası: {ex.Message}", isError: true);
+            return false;
+        }
+    }
+
+    private static void ReadShellOutput(System.IO.StreamReader reader)
+    {
+        try
+        {
+            while (!reader.EndOfStream)
+            {
+                var line = reader.ReadLine();
+                // İsteğe bağlı: adb'den gelen gizli hataları konsola veya loga yazabilirsiniz
+                // if (!string.IsNullOrEmpty(line) && line.Contains("Error")) LogManager.Log($"[ADB Çıktı] {line}");
+            }
+        }
+        catch { /* Süreç öldüğünde fırlatılan istisnayı yoksay */ }
+    }
+
+    private static async Task<string> GetConnectedDeviceAsync()
+    {
+        try
+        {
+            using var p = Process.Start(new ProcessStartInfo
+            {
+                FileName = "adb",
+                Arguments = "devices",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+
+            if (p != null)
+            {
+                var output = await p.StandardOutput.ReadToEndAsync();
+                await p.WaitForExitAsync();
+
+                foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (line.Contains("device") && !line.Contains("List of devices") && !line.Contains("offline"))
+                    {
+                        var parts = line.Split('\t', ' ', StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length > 0) return parts[0];
+                    }
+                }
+            }
+        }
+        catch { }
+        return "";
+    }
+
+    public static bool IsConnected()
+    {
+        return _shellProcess != null && !_shellProcess.HasExited;
+    }
+
+    public static void Disconnect()
+    {
+        lock (_writeLock)
+        {
+            if (_shellProcess != null && !_shellProcess.HasExited)
+            {
+                try { _shellProcess.Kill(); } catch { }
+            }
+            _shellProcess?.Dispose();
+            _shellProcess = null;
+        }
+    }
+
+    #endregion
+
+    #region Komut Gönderimi (Thread-Safe ve Sıfır Gecikme)
+
+    public static void SendCommand(string command)
+    {
+        if (!IsConnected())
+        {
+            _ = EnsureConnectedAsync();
+            return;
         }
 
-        private static async Task<(bool Success, string Error)> ExecuteCommandAsync(string arguments, CancellationToken ct)
+        // Aynı anda makro ve arayüzden komut gelirse çakışmasını önleyen kilit
+        lock (_writeLock)
         {
             try
             {
-                var startInfo = new ProcessStartInfo
+                if (_shellProcess != null && !_shellProcess.HasExited)
                 {
-                    FileName = "adb",
-                    Arguments = arguments,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using var process = Process.Start(startInfo);
-                if (process == null) return (false, "Process başlatılamadı.");
-
-                string error = await process.StandardError.ReadToEndAsync();
-                await process.WaitForExitAsync(ct);
-
-                if (!string.IsNullOrEmpty(error))
-                {
-                    return (false, error.Trim());
+                    _shellProcess.StandardInput.WriteLine(command);
+                    _shellProcess.StandardInput.Flush();
                 }
-                return (true, string.Empty);
             }
             catch (Exception ex)
             {
-                return (false, ex.Message);
+                LogManager.Log($"ADB Komut Gönderme Hatası: {ex.Message}", isError: true);
+                Disconnect(); // Hata varsa bağlantıyı kopar ki bir sonraki istekte yeniden bağlansın
             }
         }
     }
+
+    #endregion
+
+    #region Girdi Simülasyonları (Dokunma ve Tuşlar)
+
+    public static Task TapAsync(int x, int y)
+    {
+        SendCommand($"input tap {x} {y}");
+        return Task.CompletedTask;
+    }
+
+    public static Task SwipeAsync(int x1, int y1, int x2, int y2, int durationMs = 300)
+    {
+        SendCommand($"input swipe {x1} {y1} {x2} {y2} {durationMs}");
+        return Task.CompletedTask;
+    }
+
+    public static Task KeyEventAsync(string keycode)
+    {
+        SendCommand($"input keyevent {keycode}");
+        return Task.CompletedTask;
+    }
+
+    // --- Kesintisiz Sürükleme (Motionevent API) ---
+    public static void SendTouchDown(int x, int y) => SendCommand($"input motionevent DOWN {x} {y}");
+    public static void SendTouchMove(int x, int y) => SendCommand($"input motionevent MOVE {x} {y}");
+    public static void SendTouchUp(int x, int y) => SendCommand($"input motionevent UP {x} {y}");
+
+    #endregion
+
+    #region Ekran Çözünürlüğü
+
+    public static async Task<ResolutionDto> GetResolutionAsync()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(_activeDevice))
+            {
+                _activeDevice = await GetConnectedDeviceAsync();
+                if (string.IsNullOrEmpty(_activeDevice)) return new ResolutionDto { Width = 1920, Height = 1080 };
+            }
+
+            using var p = Process.Start(new ProcessStartInfo
+            {
+                FileName = "adb",
+                Arguments = $"-s {_activeDevice} shell wm size",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+
+            if (p != null)
+            {
+                var output = await p.StandardOutput.ReadToEndAsync();
+                await p.WaitForExitAsync();
+
+                // Gelişmiş Parse: Fiziksel ve Override boyutları arasında her zaman en sonuncuyu alır
+                var parts = output.Split(SizeSeparators, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    var sizeStr = parts[^1].Trim();
+                    var dims = sizeStr.Split('x');
+                    if (dims.Length == 2 && int.TryParse(dims[0].Trim(), out var w) && int.TryParse(dims[1].Trim(), out var h))
+                        return new ResolutionDto { Width = w, Height = h };
+                }
+            }
+        }
+        catch { }
+
+        return new ResolutionDto { Width = 1920, Height = 1080 };
+    }
+
+    #endregion
 }

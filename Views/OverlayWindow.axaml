@@ -38,9 +38,9 @@
                             BorderThickness="1.5"
                             HorizontalAlignment="Center" VerticalAlignment="Center"
                             Classes.pressed="{Binding IsPressed}"
-                            PointerPressed="OnKeyBadgePointerPressed"
-                            PointerMoved="OnKeyBadgePointerMoved"
-                            PointerReleased="OnKeyBadgePointerReleased"
+                            PointerPressed="OnBorderPointerPressed"
+                            PointerMoved="OnBorderPointerMoved"
+                            PointerReleased="OnBorderPointerReleased"
                             Tag="{Binding}">
                         <!-- (Diğer stil ve TextBlock ayarları aynı kalır) -->
                         <Border.Styles>
@@ -83,9 +83,9 @@
                     <Grid Width="140" Height="140"
                           Margin="-70,-70,0,0"
                           Background="Transparent"
-                          PointerPressed="OnJoystickPointerPressed"
-                          PointerMoved="OnJoystickPointerMoved"
-                          PointerReleased="OnJoystickPointerReleased"
+                          PointerPressed="OnGridPointerPressed"
+                          PointerMoved="OnGridPointerMoved"
+                          PointerReleased="OnGridPointerReleased"
                           Tag="{Binding}">
 
                         <!-- Dış Çember -->

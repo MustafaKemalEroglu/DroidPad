@@ -7,7 +7,7 @@ using WaydroidController.Models;
 
 namespace WaydroidController.Services;
 
-public sealed class MacroEngine
+public class MacroEngine
 {
     private readonly Action<string> _log;
 
@@ -19,20 +19,19 @@ public sealed class MacroEngine
         ResolutionDto profileRes,
         CancellationToken ct)
     {
-        var adbTarget = await AdbService.FindTargetAsync(ct);
-        if (adbTarget is null)
+        if (!await AdbService.EnsureConnectedAsync())
         {
-            _log("Aktif ADB hedefi bulunamadı. Waydroid bağlantısı deneniyor...");
-            await AdbService.TrySequentialAsyncPublicAsync(new[] { new[] { "connect", "127.0.0.1:5555" } }, ct);
-            await Task.Delay(1000, ct);
-            adbTarget = await AdbService.FindTargetAsync(ct) ?? "127.0.0.1:5555";
+            _log("Hata: ADB bağlantısı kurulamadı!");
+            return;
         }
 
-        var (cw, ch) = await AdbService.GetResolutionAsync(adbTarget, ct);
+        var resolution = await AdbService.GetResolutionAsync();
+        int cw = resolution.Width;
+        int ch = resolution.Height;
         var scaleX = profileRes.Width > 0 ? (double)cw / profileRes.Width : 1.0;
         var scaleY = profileRes.Height > 0 ? (double)ch / profileRes.Height : 1.0;
 
-        _log($"ADB: {adbTarget} | Ekran: {cw}x{ch} | Ölçek: {scaleX:F2}x{scaleY:F2}");
+        _log($"Makro Başladı | Ekran: {cw}x{ch} | Ölçek: {scaleX:F2}x{scaleY:F2}");
 
         var hasInfiniteLoop = commands.OfType<LoopStartCommand>().Any(l => l.Count == -1);
 
@@ -41,62 +40,76 @@ public sealed class MacroEngine
             var loopStack = new Stack<(int StartIndex, int Counter, bool Infinite)>();
             var i = 0;
 
-            while (i < commands.Count && !ct.IsCancellationRequested)
+            while (i < commands.Count)
             {
+                ct.ThrowIfCancellationRequested(); // İptal kontrolü
                 var cmd = commands[i];
+
                 switch (cmd)
                 {
                     case ClickCommand click:
-                        if (coordinates.TryGetValue(click.Target, out var c)) // click.Target = "TargetClick"
-                        {
-                            var (ok, err) = await AdbService.TapAsync(adbTarget, (int)(c.X * scaleX), (int)(c.Y * scaleY), ct);
-                            if (!ok) _log($"Tıklama hatası ({click.Target}): {err}");
-                        }
-                        else _log($"Hata: '{click.Target}' koordinatı bulunamadı!");
-                        i++; break;
+                        if (coordinates.TryGetValue(click.Target, out var c))
+                            await AdbService.TapAsync((int)(c.X * scaleX), (int)(c.Y * scaleY));
+                        else
+                            _log($"Hata: '{click.Target}' bulunamadı!");
+                        i++;
+                        break;
 
                     case SwipeCommand swipe:
                         if (coordinates.TryGetValue(swipe.Start, out var s) && coordinates.TryGetValue(swipe.End, out var e))
-                        {
-                            var (ok, err) = await AdbService.SwipeAsync(adbTarget,
-                                (int)(s.X * scaleX), (int)(s.Y * scaleY),
-                                (int)(e.X * scaleX), (int)(e.Y * scaleY), 300, ct);
-                            if (!ok) _log($"Kaydırma hatası: {err}");
-                        }
-                        i++; break;
+                            await AdbService.SwipeAsync((int)(s.X * scaleX), (int)(s.Y * scaleY), (int)(e.X * scaleX), (int)(e.Y * scaleY), 300);
+                        i++;
+                        break;
 
                     case WaitCommand wait:
+                        // Thread.Sleep yerine asenkron bekleme (CPU'yu yormaz, anında iptal edilebilir)
                         await Task.Delay(TimeSpan.FromSeconds(wait.Seconds), ct);
-                        i++; break;
+                        i++;
+                        break;
 
                     case RandomWaitCommand rw:
                         var sec = Random.Shared.NextDouble() * (rw.Max - rw.Min) + rw.Min;
                         await Task.Delay(TimeSpan.FromSeconds(sec), ct);
-                        i++; break;
+                        i++;
+                        break;
 
                     case KeyCommand key:
-                        var (kOk, kErr) = await AdbService.KeyEventAsync(adbTarget, key.Keycode, ct);
-                        if (!kOk) _log($"Tuş hatası: {kErr}");
-                        i++; break;
+                        await AdbService.KeyEventAsync(key.Keycode);
+                        i++;
+                        break;
 
                     case LoopStartCommand ls:
                         loopStack.Push((i, ls.Count, ls.Count == -1));
-                        i++; break;
+                        i++;
+                        break;
 
                     case LoopEndCommand:
                         if (loopStack.Count > 0)
                         {
                             var (start, counter, infinite) = loopStack.Peek();
-                            if (infinite) i = start + 1;
-                            else if (--counter > 0) { loopStack.Pop(); loopStack.Push((start, counter, false)); i = start + 1; }
-                            else { loopStack.Pop(); i++; }
+                            if (infinite)
+                                i = start + 1;
+                            else if (--counter > 0)
+                            {
+                                loopStack.Pop();
+                                loopStack.Push((start, counter, false));
+                                i = start + 1;
+                            }
+                            else
+                            {
+                                loopStack.Pop();
+                                i++;
+                            }
                         }
-                        else i++;
+                        else
+                            i++;
                         break;
 
-                    default: i++; break;
+                    default:
+                        i++;
+                        break;
                 }
             }
-        } while (hasInfiniteLoop && !ct.IsCancellationRequested);
+        } while (hasInfiniteLoop); // Sonsuz döngü varsa baştan başla
     }
 }
