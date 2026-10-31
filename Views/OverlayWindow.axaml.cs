@@ -62,22 +62,73 @@ public partial class OverlayWindow : Window
         await vm.OnKeyReleasedAsync(keyName);
     }
 
+    private Point? _dragStartPoint;
+    private Point? _lastMovePoint;
+    private bool _isDragging = false;
+    private const double DragThreshold = 8.0; // Sürükleme algılama eşiği
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        if (DataContext is not MainWindowViewModel vm) return;
-
-        if (vm.State.IsContextMenuOpen)
-        {
-            vm.State.IsContextMenuOpen = false;
-        }
-
-        var point = e.GetPosition(this);
         var properties = e.GetCurrentPoint(this).Properties;
-
-        if (vm.State.IsPanelOpen && properties.IsRightButtonPressed)
+        if (properties.IsLeftButtonPressed)
         {
-            vm.OpenContextMenu(point.X, point.Y);
+            _dragStartPoint = e.GetPosition(this);
+            _lastMovePoint = _dragStartPoint;
+            _isDragging = false;
+            e.Pointer.Capture(this);
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+
+        if (_dragStartPoint.HasValue && DataContext is MainWindowViewModel vm)
+        {
+            var currentPoint = e.GetPosition(this);
+
+            if (!_isDragging)
+            {
+                var distance = Math.Sqrt(Math.Pow(currentPoint.X - _dragStartPoint.Value.X, 2) + Math.Pow(currentPoint.Y - _dragStartPoint.Value.Y, 2));
+                if (distance > DragThreshold)
+                {
+                    _isDragging = true;
+                }
+            }
+
+            if (_isDragging && _lastMovePoint.HasValue)
+            {
+                // Son konumdan yeni konuma anlık akıcı swipe gönder
+                vm.ExecuteInstantSwipe(_lastMovePoint.Value.X, _lastMovePoint.Value.Y, currentPoint.X, currentPoint.Y, Bounds.Width, Bounds.Height, RenderScaling);
+                _lastMovePoint = currentPoint;
+            }
+
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+
+        if (_dragStartPoint.HasValue && DataContext is MainWindowViewModel vm)
+        {
+            var endPoint = e.GetPosition(this);
+            var start = _dragStartPoint.Value;
+
+            _dragStartPoint = null;
+            _lastMovePoint = null;
+            e.Pointer.Capture(null);
+
+            if (!_isDragging)
+            {
+                // Sürükleme eşiği aşılmadıysa saf bir Tıklama (Tap)
+                vm.ExecuteInstantTap(start.X, start.Y, Bounds.Width, Bounds.Height, RenderScaling);
+            }
+
+            _isDragging = false;
             e.Handled = true;
         }
     }
@@ -183,8 +234,4 @@ public partial class OverlayWindow : Window
             e.Handled = true;
         }
     }
-
-    private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e) { }
-    private void OnCanvasPointerMoved(object? sender, PointerEventArgs e) { }
-    private void OnCanvasPointerReleased(object? sender, PointerReleasedEventArgs e) { }
 }

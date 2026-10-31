@@ -97,26 +97,79 @@ public partial class MainWindowViewModel : ObservableObject
 
     public event Action? MiniWindowRequested;
 
+    // Sınıf alanlarına ekleyin:
+    private readonly KeyMapperEngine _keyMapperEngine;
+
+    // Constructor içinde:
     public MainWindowViewModel()
     {
         var engine = new MacroEngine(Log);
-        var keyMapperEngine = new KeyMapperEngine(Log);
+        _keyMapperEngine = new KeyMapperEngine(Log);
 
         _profileManager = new ProfileManager(_coordManager, _keyMappingManager, _macroManager, JsonOptions);
         _automationManager = new AutomationManager(engine, Log);
-        _keyInputManager = new KeyInputManager(keyMapperEngine, Log);
+        _keyInputManager = new KeyInputManager(_keyMapperEngine, Log);
 
-        // EditorState içinde değişen her property'yi ViewModel üzerinden arayüze bildir
         State.PropertyChanged += (s, e) => OnPropertyChanged(e.PropertyName);
 
         _automationManager.StateChanged += () =>
         {
-            IsRunning = _automationManager.IsRunning;
+            State.IsRunning = _automationManager.IsRunning;
             StartCommand.NotifyCanExecuteChanged();
             StopCommand.NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(MiniCountdownText));
             OnPropertyChanged(nameof(CanEditCountdown));
         };
+    }
+
+    // Anlık ve akıcı kaydırma (Swipe) komutunu interaktif ADB kabuğu üzerinden iletir
+    public async void ExecuteInstantSwipe(double startX, double startY, double endX, double endY, double windowWidth, double windowHeight, double scaling)
+    {
+        if (windowWidth <= 0 || windowHeight <= 0) return;
+
+        // Waydroid gerçek çözünürlüğünü dinamik olarak al
+        var resolution = await AdbService.GetWaydroidResolutionAsync(new ResolutionDto { Width = 1440, Height = 786 });
+
+        double scaleX = (double)resolution.Width / windowWidth;
+        double scaleY = (double)resolution.Height / windowHeight;
+
+        int x1 = (int)(startX * scaleX * scaling);
+        int y1 = (int)(startY * scaleY * scaling);
+        int x2 = (int)(endX * scaleX * scaling);
+        int y2 = (int)(endY * scaleY * scaling);
+
+        x1 = Math.Clamp(x1, 0, resolution.Width);
+        y1 = Math.Clamp(y1, 0, resolution.Height);
+        x2 = Math.Clamp(x2, 0, resolution.Width);
+        y2 = Math.Clamp(y2, 0, resolution.Height);
+
+        var adbTarget = await AdbService.FindTargetAsync(default) ?? "127.0.0.1:5555";
+        AdbService.SendInstantSwipe(adbTarget, x1, y1, x2, y2, 15);
+    }
+
+    // Anlık ve akıcı dokunma (Tap) komutunu interaktif ADB kabuğu üzerinden iletir
+    public async void ExecuteInstantTap(double windowX, double windowY, double windowWidth, double windowHeight, double scaling)
+    {
+        if (windowWidth <= 0 || windowHeight <= 0) return;
+
+        var resolution = await AdbService.GetWaydroidResolutionAsync(new ResolutionDto { Width = 1440, Height = 786 });
+
+        double scaleX = (double)resolution.Width / windowWidth;
+        double scaleY = (double)resolution.Height / windowHeight;
+
+        int x = (int)(windowX * scaleX * scaling);
+        int y = (int)(windowY * scaleY * scaling);
+
+        x = Math.Clamp(x, 0, resolution.Width);
+        y = Math.Clamp(y, 0, resolution.Height);
+
+        var adbTarget = await AdbService.FindTargetAsync(default) ?? "127.0.0.1:5555";
+        AdbService.SendInstantTap(adbTarget, x, y);
+    }
+
+    public async Task ExecuteTouchOrSwipeAsync(double startX, double startY, double endX, double endY, double actualWidth, double actualHeight, double scaling)
+    {
+        await _keyMapperEngine.ExecuteTouchOrSwipeAsync(startX, startY, endX, endY, actualWidth, actualHeight, ProfileResolution, scaling);
     }
 
     // --- Panel & Mod Kontrolleri ---

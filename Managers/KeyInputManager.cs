@@ -59,22 +59,20 @@ public class KeyInputManager
         return false;
     }
 
-    public async Task OnKeyPressedAsync(string keyName, IReadOnlyList<KeyBinding> keyBindings, IList<JoystickGroup> joystickGroups, ResolutionDto resolution)
+    public async Task OnKeyPressedAsync(string keyName, IEnumerable<KeyBinding> keyBindings, IEnumerable<JoystickGroup> joystickGroups, ResolutionDto resolution)
     {
         var normalizedKey = NormalizeKeyName(keyName);
         if (_activePressedKeys.Contains(normalizedKey)) return;
         _activePressedKeys.Add(normalizedKey);
 
-        // 1. Tap Tuşlarını Kontrol Et
         var tapBinding = keyBindings.FirstOrDefault(b => NormalizeKeyName(b.KeyName).Equals(normalizedKey, StringComparison.OrdinalIgnoreCase));
         if (tapBinding != null)
         {
             tapBinding.IsPressed = true;
-            await _keyMapperEngine.HandleKeyPressAsync(normalizedKey, keyBindings, resolution);
+            await _keyMapperEngine.HandleKeyPressAsync(normalizedKey, keyBindings.ToList(), resolution);
             return;
         }
 
-        // 2. Joystick Gruplarını Kontrol Et (WASD vb.)
         foreach (var jg in joystickGroups)
         {
             bool matched = false;
@@ -90,7 +88,7 @@ public class KeyInputManager
         }
     }
 
-    public async Task OnKeyReleasedAsync(string keyName, IList<KeyBinding> keyBindings, IList<JoystickGroup> joystickGroups, ResolutionDto resolution)
+    public async Task OnKeyReleasedAsync(string keyName, IEnumerable<KeyBinding> keyBindings, IEnumerable<JoystickGroup> joystickGroups, ResolutionDto resolution)
     {
         var normalizedKey = NormalizeKeyName(keyName);
         _activePressedKeys.Remove(normalizedKey);

@@ -9,6 +9,7 @@
         Background="Transparent"
         TransparencyLevelHint="Transparent"
         WindowDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
         Topmost="True"
         WindowState="Maximized">
 
@@ -16,14 +17,11 @@
         <!-- 0. Düzenleme Modu Aktifken Arka Planı Hafif Karartan Perde -->
         <Border Background="#44000000" IsVisible="{Binding State.IsPanelOpen}" IsHitTestVisible="False"/>
 
-        <!-- 1. Ekran Üzerindeki Tap Tuşları -->
+        <!-- 1. Ekran Üzerindeki Tap Tuşları ve Sürükleme Alanı -->
         <ItemsControl ItemsSource="{Binding KeyBindings}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <Canvas Background="Transparent"
-                            PointerPressed="OnCanvasPointerPressed"
-                            PointerMoved="OnCanvasPointerMoved"
-                            PointerReleased="OnCanvasPointerReleased"/>
+                    <Canvas Background="Transparent"/>
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
 
@@ -44,6 +42,7 @@
                             PointerMoved="OnKeyBadgePointerMoved"
                             PointerReleased="OnKeyBadgePointerReleased"
                             Tag="{Binding}">
+                        <!-- (Diğer stil ve TextBlock ayarları aynı kalır) -->
                         <Border.Styles>
                             <Style Selector="Border">
                                 <Setter Property="Background" Value="#AA1E1E1E"/>
@@ -55,7 +54,6 @@
                             </Style>
                         </Border.Styles>
 
-                        <!-- IsHitTestVisible="False" eklendi -->
                         <TextBlock Text="{Binding KeyName}" Foreground="#FFFFFF"
                                    FontFamily="Consolas" FontSize="14" FontWeight="Bold"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -141,7 +139,7 @@
         <!-- 4. Dikey Araç Çubuğu (Sidebar) -->
         <Border HorizontalAlignment="Right" VerticalAlignment="Stretch"
                 Background="#DD1E1E1E" BorderBrush="#333333" BorderThickness="1,0,0,0"
-                Padding="6,15,6,10" Width="52">
+                Padding="3,15,3,10" Width="44">
             <StackPanel Spacing="15" HorizontalAlignment="Center">
 
                 <Button Content="⌨" ToolTip.Tip="Tuş Atama Modunu Aç/Kapat (F12)"
