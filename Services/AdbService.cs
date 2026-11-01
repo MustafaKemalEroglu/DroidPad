@@ -8,7 +8,6 @@ namespace WaydroidController.Services;
 
 public static class AdbService
 {
-    #region Değişkenler ve Sabitler
     private static Process? _shellProcess;
     private static readonly object _writeLock = new();
     private static readonly object _connectLock = new();
@@ -17,9 +16,6 @@ public static class AdbService
 
     private const string DefaultWaydroidIp = "192.168.240.112:5555";
     private static readonly string[] SizeSeparators = { "size:", "Size:" };
-    #endregion
-
-    #region Bağlantı Yönetimi
 
     public static async Task<bool> EnsureConnectedAsync()
     {
@@ -150,10 +146,6 @@ public static class AdbService
         }
     }
 
-    #endregion
-
-    #region Komut Gönderimi
-
     public static void SendCommand(string command)
     {
         if (!IsConnected())
@@ -179,10 +171,6 @@ public static class AdbService
         }
     }
 
-    #endregion
-
-    #region Girdi Simülasyonları (Dokunma ve Tuşlar)
-
     public static Task TapAsync(int x, int y)
     {
         SendCommand($"input tap {x} {y}");
@@ -205,10 +193,6 @@ public static class AdbService
     public static void SendTouchDown(int x, int y) => SendCommand($"input motionevent DOWN {x} {y}");
     public static void SendTouchMove(int x, int y) => SendCommand($"input motionevent MOVE {x} {y}");
     public static void SendTouchUp(int x, int y) => SendCommand($"input motionevent UP {x} {y}");
-
-    #endregion
-
-    #region Ekran Çözünürlüğü
 
     public static async Task<ResolutionDto> GetResolutionAsync()
     {
@@ -248,6 +232,4 @@ public static class AdbService
 
         return new ResolutionDto { Width = 1920, Height = 1080 };
     }
-
-    #endregion
 }

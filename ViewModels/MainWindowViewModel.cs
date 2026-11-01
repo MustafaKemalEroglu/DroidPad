@@ -95,13 +95,10 @@ public partial class MainWindowViewModel : ObservableObject
         _touchScaleX = (double)resolution.Width / windowWidth;
         _touchScaleY = (double)resolution.Height / windowHeight;
 
-        // Scrcpy Soket bağlantısını başlat (Waydroid boyutlarını gönderiyoruz)
-        await ScrcpyService.ConnectAsync(resolution.Width, resolution.Height);
-
         int tx = (int)(windowX * _touchScaleX);
         int ty = (int)(windowY * _touchScaleY);
 
-        ScrcpyService.SendTouchDown(tx, ty);
+        AdbService.SendTouchDown(tx, ty);
     }
 
     public void MoveTouch(double windowX, double windowY, double scaling)
@@ -109,7 +106,7 @@ public partial class MainWindowViewModel : ObservableObject
         int tx = (int)(windowX * _touchScaleX);
         int ty = (int)(windowY * _touchScaleY);
 
-        ScrcpyService.SendTouchMove(tx, ty);
+        AdbService.SendTouchMove(tx, ty);
     }
 
     public void EndTouch(double windowX, double windowY, double scaling)
@@ -117,9 +114,8 @@ public partial class MainWindowViewModel : ObservableObject
         int tx = (int)(windowX * _touchScaleX);
         int ty = (int)(windowY * _touchScaleY);
 
-        ScrcpyService.SendTouchUp(tx, ty);
+        AdbService.SendTouchUp(tx, ty);
     }
-
     // --- OverlayWindow için Eski Metotlar ---
 
     public void StartWaitingForKey()
@@ -249,12 +245,6 @@ public partial class MainWindowViewModel : ObservableObject
             "loop_end" => "-",
             _ => ""
         };
-    }
-
-    private void OnCountdownTick(int remaining)
-    {
-        var h = remaining / 3600; var m = remaining % 3600 / 60; var s = remaining % 60;
-        Dispatcher.UIThread.Post(() => MiniCountdownText = $"{h:00}:{m:00}:{s:00}");
     }
 
     private static SwipeCommand? ParseSwipe(string value)

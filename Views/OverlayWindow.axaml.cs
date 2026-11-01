@@ -12,6 +12,7 @@ public partial class OverlayWindow : Window
 {
     private bool _isDragging;
     private Point _dragStartPoint;
+    private DateTime _lastMoveTime = DateTime.MinValue;
 
     public OverlayWindow()
     {
@@ -31,9 +32,7 @@ public partial class OverlayWindow : Window
             _dragStartPoint = e.GetPosition(this);
             _isDragging = true;
 
-            // Scrcpy üzerinden DOWN
             _ = vm.StartTouchAsync(_dragStartPoint.X, _dragStartPoint.Y, Bounds.Width, Bounds.Height, RenderScaling);
-
             e.Pointer.Capture(this);
             e.Handled = true;
         }
@@ -44,11 +43,14 @@ public partial class OverlayWindow : Window
         if (DataContext is not MainWindowViewModel vm) return;
         if (!_isDragging || vm.State.IsPanelOpen) return;
 
+        // 33ms Throttle (Saniyede ~30 kare)
+        var now = DateTime.Now;
+        if ((now - _lastMoveTime).TotalMilliseconds < 33)
+            return;
+        _lastMoveTime = now;
+
         var currentPoint = e.GetPosition(this);
-
-        // Scrcpy üzerinden MOVE (Frenleme yok, her kare anında gidiyor)
         vm.MoveTouch(currentPoint.X, currentPoint.Y, RenderScaling);
-
         e.Handled = true;
     }
 
@@ -60,16 +62,18 @@ public partial class OverlayWindow : Window
         _isDragging = false;
         var endPoint = e.GetPosition(this);
 
-        // Scrcpy üzerinden UP
         vm.EndTouch(endPoint.X, endPoint.Y, RenderScaling);
 
         e.Pointer.Capture(null);
         e.Handled = true;
     }
 
-    // Köprüler
     public void OnGridPointerPressed(object? sender, PointerPressedEventArgs e) => OnBorderPointerPressed(sender, e);
     public void OnGridPointerMoved(object? sender, PointerEventArgs e) => OnBorderPointerMoved(sender, e);
     public void OnGridPointerReleased(object? sender, PointerReleasedEventArgs e) => OnBorderPointerReleased(sender, e);
-    public void OnStartWaitingForKeyClick(object? sender, RoutedEventArgs e) => (DataContext as MainWindowViewModel)?.StartWaitingForKey();
+
+    public void OnStartWaitingForKeyClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm) vm.StartWaitingForKey();
+    }
 }
