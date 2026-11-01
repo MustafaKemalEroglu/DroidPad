@@ -87,7 +87,6 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     // --- OverlayWindow için Kesintisiz Dokunma Köprüleri ---
-
     public async Task StartTouchAsync(double windowX, double windowY, double windowWidth, double windowHeight, double scaling)
     {
         if (windowWidth <= 0 || windowHeight <= 0) return;
@@ -96,24 +95,29 @@ public partial class MainWindowViewModel : ObservableObject
         _touchScaleX = (double)resolution.Width / windowWidth;
         _touchScaleY = (double)resolution.Height / windowHeight;
 
+        // Scrcpy Soket bağlantısını başlat (Waydroid boyutlarını gönderiyoruz)
+        await ScrcpyService.ConnectAsync(resolution.Width, resolution.Height);
+
         int tx = (int)(windowX * _touchScaleX);
         int ty = (int)(windowY * _touchScaleY);
 
-        AdbService.SendTouchDown(tx, ty);
+        ScrcpyService.SendTouchDown(tx, ty);
     }
 
     public void MoveTouch(double windowX, double windowY, double scaling)
     {
         int tx = (int)(windowX * _touchScaleX);
         int ty = (int)(windowY * _touchScaleY);
-        AdbService.SendTouchMove(tx, ty);
+
+        ScrcpyService.SendTouchMove(tx, ty);
     }
 
     public void EndTouch(double windowX, double windowY, double scaling)
     {
         int tx = (int)(windowX * _touchScaleX);
         int ty = (int)(windowY * _touchScaleY);
-        AdbService.SendTouchUp(tx, ty);
+
+        ScrcpyService.SendTouchUp(tx, ty);
     }
 
     // --- OverlayWindow için Eski Metotlar ---

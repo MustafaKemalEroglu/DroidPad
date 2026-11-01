@@ -7,6 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
     <Version>0.1.0-alpha.1</Version>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
@@ -20,12 +23,6 @@
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-
-    <!-- ILLink uyarılarını sustur (rooted assembly'lerde yanlış alarm) -->
-    <NoWarn>$(NoWarn);IL2026;IL2070;IL2072;IL2075</NoWarn>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>none</DebugType>
   </PropertyGroup>
   
@@ -46,5 +43,12 @@
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.4" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
+    <PackageReference Include="TqkLibrary.Scrcpy" Version="4.1.6" />
+  </ItemGroup>
+
+    <ItemGroup>
+    <Content Include="Resources\scrcpy-server-v2.4">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 </Project>
