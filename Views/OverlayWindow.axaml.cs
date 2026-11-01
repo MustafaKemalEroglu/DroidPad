@@ -20,6 +20,11 @@ public partial class OverlayWindow : Window
         this.PointerPressed += OnBorderPointerPressed;
         this.PointerMoved += OnBorderPointerMoved;
         this.PointerReleased += OnBorderPointerReleased;
+
+        // YENİ: Klavye olayları
+        this.KeyDown += OnWindowKeyDown;
+        this.KeyUp += OnWindowKeyUp;
+        this.Focusable = true;
     }
 
     public void OnBorderPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -75,5 +80,25 @@ public partial class OverlayWindow : Window
     public void OnStartWaitingForKeyClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is MainWindowViewModel vm) vm.StartWaitingForKey();
+    }
+
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm) return;
+        if (vm.State.IsPanelOpen) return; // Panel açıkken tuşları oyuna gönderme
+
+        // F1-F12 gibi fonksiyon tuşlarını hariç tut (F12 panel aç/kapat için kullanılıyor)
+        if (e.KeyModifiers == KeyModifiers.None && !e.Key.ToString().StartsWith("F"))
+        {
+            vm.ProcessKeyDown(e.Key.ToString());
+            e.Handled = true;
+        }
+    }
+
+    private void OnWindowKeyUp(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm) return;
+        vm.ProcessKeyUp(e.Key.ToString());
+        e.Handled = true;
     }
 }

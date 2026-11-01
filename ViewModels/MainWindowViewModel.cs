@@ -22,6 +22,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly WorkspaceManager _workspace;
     private readonly AutomationService _automation;
     private readonly KeyMappingManager _keyMappingManager;
+    private readonly KeyMapperEngine _keyMapperEngine;
 
     // --- Koleksiyonlar ---
     public ObservableCollection<Coordinate> Coordinates => _workspace.Coordinates;
@@ -70,6 +71,7 @@ public partial class MainWindowViewModel : ObservableObject
         _workspace = new WorkspaceManager();
         _keyMappingManager = new KeyMappingManager();
         _automation = new AutomationService();
+        _keyMapperEngine = new KeyMapperEngine();
 
         _automation.PropertyChanged += (_, e) =>
         {
@@ -139,8 +141,18 @@ public partial class MainWindowViewModel : ObservableObject
     // --- Komutlar (UI Butonları) ---
 
     [RelayCommand] private void StartPickingCoordinate() => LogService.Info("Koordinat seçimi başlatıldı...");
-    [RelayCommand] private void AddTapBinding() => LogService.Info($"Tap tuşu eklendi: {NewTapKey}");
-    [RelayCommand] private void AddMuMuJoystick() => LogService.Info($"Joystick eklendi: {JoystickPreset}, Yarıçap: {JoystickRadius}");
+    [RelayCommand]
+    private void AddTapBinding()
+    {
+        _keyMappingManager.AddTapBinding(NewTapKey, CoordX, CoordY);
+    }
+
+    [RelayCommand]
+    private void AddMuMuJoystick()
+    {
+        if (!int.TryParse(JoystickRadius, out var radius)) return;
+        _keyMappingManager.AddJoystickGroup(JoystickPreset, radius, CoordX, CoordY);
+    }
     [RelayCommand] private void RemoveKeyBinding() { if (SelectedKeyBinding != null) KeyBindings.Remove(SelectedKeyBinding); }
     [RelayCommand] private void AddTapFromContextMenu() => LogService.Info("Sağ tık menüsünden Tap eklendi.");
     [RelayCommand] private void AddJoystickFromContextMenu() => LogService.Info("Sağ tık menüsünden Joystick eklendi.");
@@ -226,6 +238,47 @@ public partial class MainWindowViewModel : ObservableObject
                 ProfileResolution.Width = profile.Resolution.Width;
                 ProfileResolution.Height = profile.Resolution.Height;
             }
+        }
+    }
+
+    public void ProcessKeyDown(string keyName)
+    {
+        // Tap tuşları için anlık tıklama
+        var binding = KeyBindings.FirstOrDefault(b => b.KeyName.Equals(keyName, StringComparison.OrdinalIgnoreCase));
+        if (binding != null && binding.Type == KeyBindingType.Tap)
+        {
+            _ = AdbService.TapAsync(binding.X, binding.Y);
+            LogService.Debug($"[KEY] {keyName} -> Tıklandı ({binding.X}, {binding.Y})");
+        }
+
+        // Joystick grupları için yön tuşlarını işle
+        foreach (var jg in JoystickGroups)
+        {
+            if (jg.UpKey.Equals(keyName, StringComparison.OrdinalIgnoreCase)) jg.IsUpPressed = true;
+            if (jg.DownKey.Equals(keyName, StringComparison.OrdinalIgnoreCase)) jg.IsDownPressed = true;
+            if (jg.LeftKey.Equals(keyName, StringComparison.OrdinalIgnoreCase)) jg.IsLeftPressed = true;
+            if (jg.RightKey.Equals(keyName, StringComparison.OrdinalIgnoreCase)) jg.IsRightPressed = true;
+        }
+        _ = UpdateJoysticksAsync();
+    }
+
+    public void ProcessKeyUp(string keyName)
+    {
+        foreach (var jg in JoystickGroups)
+        {
+            if (jg.UpKey.Equals(keyName, StringComparison.OrdinalIgnoreCase)) jg.IsUpPressed = false;
+            if (jg.DownKey.Equals(keyName, StringComparison.OrdinalIgnoreCase)) jg.IsDownPressed = false;
+            if (jg.LeftKey.Equals(keyName, StringComparison.OrdinalIgnoreCase)) jg.IsLeftPressed = false;
+            if (jg.RightKey.Equals(keyName, StringComparison.OrdinalIgnoreCase)) jg.IsRightPressed = false;
+        }
+        _ = UpdateJoysticksAsync();
+    }
+
+    private async Task UpdateJoysticksAsync()
+    {
+        foreach (var jg in JoystickGroups)
+        {
+            await _keyMapperEngine.UpdateJoystickGroupStateAsync(jg, ProfileResolution);
         }
     }
 

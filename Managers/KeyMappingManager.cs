@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using WaydroidController.Models;
+using WaydroidController.Services;
 
 namespace WaydroidController.Managers;
 
@@ -9,7 +10,7 @@ public class KeyMappingManager
     public ObservableCollection<KeyBinding> KeyBindings { get; } = new();
     public ObservableCollection<JoystickGroup> JoystickGroups { get; } = new();
 
-    public void AddTapBinding(string key, string coordX, string coordY, Action<string> logger)
+    public void AddTapBinding(string key, string coordX, string coordY)
     {
         if (string.IsNullOrWhiteSpace(key)) return;
         int targetX = int.TryParse(coordX, out var parsedX) ? parsedX : 500;
@@ -23,10 +24,10 @@ public class KeyMappingManager
             Y = targetY
         });
 
-        logger($"[Tap] Tuş eklendi: {key.ToUpper()} -> ({targetX}, {targetY})");
+        LogService.Info($"[Tap] Tuş eklendi: {key.ToUpper()} -> ({targetX}, {targetY})");
     }
 
-    public void AddTapAtPosition(Avalonia.Point coord, bool isPanelOpen, Action<string> logger)
+    public void AddTapAtPosition(Avalonia.Point coord, bool isPanelOpen)
     {
         if (!isPanelOpen) return;
 
@@ -42,10 +43,10 @@ public class KeyMappingManager
             Y = y
         });
 
-        logger($"[Konum] Yeni Tap tuşu eklendi: {keyChar} -> ({x}, {y})");
+        LogService.Info($"[Konum] Yeni Tap tuşu eklendi: {keyChar} -> ({x}, {y})");
     }
     // Çember Joystick Grubu Ekleme
-    public void AddJoystickGroup(string preset, int radius, string coordX, string coordY, Action<string> logger)
+    public void AddJoystickGroup(string preset, int radius, string coordX, string coordY)
     {
         int centerX = int.TryParse(coordX, out var parsedX) ? parsedX : 500;
         int centerY = int.TryParse(coordY, out var parsedY) ? parsedY : 500;
@@ -64,21 +65,21 @@ public class KeyMappingManager
             PresetName = preset
         });
 
-        logger($"[Joystick] Çember joystick eklendi ({preset}). Merkez: ({centerX}, {centerY})");
+        LogService.Info($"[Joystick] Çember joystick eklendi ({preset}). Merkez: ({centerX}, {centerY})");
     }
 
-    public void RemoveBinding(KeyBinding? selectedBinding, Action<string> logger)
+    public void RemoveBinding(KeyBinding? selectedBinding)
     {
         if (selectedBinding is null) return;
         KeyBindings.Remove(selectedBinding);
-        logger("Tuş ataması silindi.");
+        LogService.Info("Tuş ataması silindi.");
     }
 
-    public void RemoveJoystick(JoystickGroup? selectedJoystick, Action<string> logger)
+    public void RemoveJoystick(JoystickGroup? selectedJoystick)
     {
         if (selectedJoystick is null) return;
         JoystickGroups.Remove(selectedJoystick);
-        logger("Joystick grubu silindi.");
+        LogService.Info("Joystick grubu silindi.");
     }
 
     private (string up, string left, string down, string right) GetPresetKeys(string preset)

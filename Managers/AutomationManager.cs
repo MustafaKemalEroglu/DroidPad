@@ -6,8 +6,7 @@ namespace WaydroidController.Managers;
 
 public class AutomationManager
 {
-    private readonly MacroEngine _engine;
-    private readonly Action<string> _logger;
+    private readonly MacroEngine _engine = new();
     private CancellationTokenSource? _runCts;
     private CountdownService? _countdown;
 
@@ -22,12 +21,6 @@ public class AutomationManager
 
     public event Action? StateChanged;
 
-    public AutomationManager(MacroEngine engine, Action<string> logger)
-    {
-        _engine = engine;
-        _logger = logger;
-    }
-
     public async Task StartAsync(
         IEnumerable<MacroCommand> commands,
         Dictionary<string, Coordinate> coordsDict,
@@ -37,7 +30,7 @@ public class AutomationManager
         var cmdList = commands.ToList();
         if (!cmdList.Any())
         {
-            _logger("Hata: Çalıştırılacak komut yok!");
+            LogService.Error("Hata: Çalıştırılacak komut yok!");
             return;
         }
 
@@ -46,7 +39,7 @@ public class AutomationManager
             var total = CdHours * 3600 + CdMinutes * 60 + CdSeconds;
             if (total <= 0)
             {
-                _logger("Hata: Geri sayım süresi 0'dan büyük olmalıdır!");
+                LogService.Error("Hata: Geri sayım süresi 0'dan büyük olmalıdır!");
                 return;
             }
             _countdown?.Stop();
@@ -81,7 +74,7 @@ public class AutomationManager
     {
         if (!IsRunning) return;
         _runCts?.Cancel();
-        _logger("Otomasyon durduruldu.");
+        LogService.Info("Otomasyon durduruldu.");
     }
 
     private void OnCountdownTick(int remaining)

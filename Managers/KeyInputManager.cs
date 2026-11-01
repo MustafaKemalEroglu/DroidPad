@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Avalonia.Input;
 using WaydroidController.Models;
 using WaydroidController.Services;
@@ -11,16 +7,10 @@ namespace WaydroidController.Managers;
 
 public class KeyInputManager
 {
-    private readonly KeyMapperEngine _keyMapperEngine;
+    private readonly KeyMapperEngine _keyMapperEngine = new();
     private readonly HashSet<string> _activePressedKeys = new();
     private KeyBinding? _waitingForKeyBinding;
-    private readonly Action<string> _logger;
 
-    public KeyInputManager(KeyMapperEngine keyMapperEngine, Action<string> logger)
-    {
-        _keyMapperEngine = keyMapperEngine;
-        _logger = logger;
-    }
 
     public static string NormalizeKeyName(string rawKey)
     {
@@ -41,7 +31,7 @@ public class KeyInputManager
     {
         _waitingForKeyBinding = binding;
         binding.KeyName = "...";
-        _logger($"⌨️ '{binding.Type}' için yeni tuşa basın...");
+        LogService.Info($"⌨️ '{binding.Type}' için yeni tuşa basın...");
     }
 
     public bool HandleKeyAssignment(KeyEventArgs e)
@@ -52,7 +42,7 @@ public class KeyInputManager
             var normalized = NormalizeKeyName(keyStr);
 
             _waitingForKeyBinding.KeyName = normalized;
-            _logger($"✅ Yeni tuş atandı: {normalized}");
+            LogService.Info($"✅ Yeni tuş atandı: {normalized}");
             _waitingForKeyBinding = null;
             return true;
         }

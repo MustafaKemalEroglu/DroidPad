@@ -9,19 +9,12 @@ namespace WaydroidController.Services;
 
 public class KeyMapperEngine
 {
-    private readonly Action<string> _logger;
-
-    public KeyMapperEngine(Action<string> logger)
-    {
-        _logger = logger;
-    }
-
     public async Task HandleKeyPressAsync(string keyName, IList<KeyBinding> keyBindings, ResolutionDto resolution)
     {
         var binding = keyBindings.FirstOrDefault(b => b.KeyName.Equals(keyName, StringComparison.OrdinalIgnoreCase));
         if (binding != null && binding.Type == KeyBindingType.Tap)
         {
-            _logger($"[Tap] '{binding.KeyName}' tetiklendi -> X: {binding.X}, Y: {binding.Y}");
+            LogService.Info($"[Tap] '{binding.KeyName}' tetiklendi -> X: {binding.X}, Y: {binding.Y}");
             await ExecuteAdbCommandAsync($"shell input tap {binding.X} {binding.Y}");
         }
     }
@@ -58,14 +51,14 @@ public class KeyMapperEngine
             int targetX = centerX + (int)offsetX;
             int targetY = centerY + (int)offsetY;
 
-            _logger($"🎮 [Joystick] Merkez ({centerX}, {centerY}) -> Çember Kıyısı ({targetX}, {targetY}) [Kaydırma Aktif]");
+            LogService.Info($"🎮 [Joystick] Merkez ({centerX}, {centerY}) -> Çember Kıyısı ({targetX}, {targetY}) [Kaydırma Aktif]");
 
             // ADB ile merkezden hedef çember kıyısına kaydırma simülasyonu
             await ExecuteAdbCommandAsync($"shell input touchscreen swipe {centerX} {centerY} {targetX} {targetY} 50");
         }
         else
         {
-            _logger($"🛑 [Joystick] Merkez ({centerX}, {centerY}) [Bırakıldı]");
+            LogService.Info($"🛑 [Joystick] Merkez ({centerX}, {centerY}) [Bırakıldı]");
             // Tuşlar bırakıldığında joystick merkezine resetleme dokunuşu
             await ExecuteAdbCommandAsync($"shell input tap {centerX} {centerY}");
         }
@@ -93,7 +86,7 @@ public class KeyMapperEngine
         }
         catch (Exception ex)
         {
-            _logger($"❌ [ADB Hatası]: {ex.Message}");
+            LogService.Error($"❌ [ADB Hatası]: {ex.Message}");
         }
     }
 
@@ -119,7 +112,7 @@ public class KeyMapperEngine
 
         string logMessage = $"🎯 [RealResDebug] Waydroid Res: {resolution.Width}x{resolution.Height} | Ham: ({windowX:F0}, {windowY:F0}) | ADB Hedef: ({x1}, {y1})";
         Console.WriteLine(logMessage);
-        _logger(logMessage);
+        LogService.Info(logMessage);
 
         double distance = Math.Sqrt(Math.Pow(x2 - x1, 2) + Math.Pow(y2 - y1, 2));
 
