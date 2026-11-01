@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
-using WaydroidController.Models;
 
 namespace WaydroidController.Models;
 
