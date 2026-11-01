@@ -4,7 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using WaydroidController.Services; // LogManager için
+using WaydroidController.Services;
 using WaydroidController.ViewModels;
 
 namespace WaydroidController.Views;
@@ -14,19 +14,16 @@ public partial class OverlayWindow : Window
     private bool _isDragging;
     private Point _dragStartPoint;
     private Point _lastMovePoint;
-    private DateTime _lastMoveTime = DateTime.MinValue;
+    private DateTime _lastMoveTime = DateTime.MinValue; // Frenleme için zaman tutucu
 
     public OverlayWindow()
     {
         InitializeComponent();
 
-        // XAML bağlantılarını atlayıp doğrudan pencereye olayları bağlıyoruz
+        // Olayları kod tarafında bağla
         this.PointerPressed += OnBorderPointerPressed;
         this.PointerMoved += OnBorderPointerMoved;
         this.PointerReleased += OnBorderPointerReleased;
-
-        // Test için log
-        LogService.Info("[Overlay] Pencere hazır. Tıklama bekleniyor...");
     }
 
     public void OnBorderPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -40,12 +37,7 @@ public partial class OverlayWindow : Window
             _lastMovePoint = _dragStartPoint;
             _isDragging = true;
 
-            // Tıklamanın algılandığını logla
-            LogService.Info($"[Overlay] TIKLAMA ALGILANDI. Başlangıç: {_dragStartPoint.X}, {_dragStartPoint.Y}");
-
-            // DOWN gönder
             _ = vm.StartTouchAsync(_dragStartPoint.X, _dragStartPoint.Y, Bounds.Width, Bounds.Height, RenderScaling);
-
             e.Pointer.Capture(this);
             e.Handled = true;
         }
@@ -56,19 +48,16 @@ public partial class OverlayWindow : Window
         if (DataContext is not MainWindowViewModel vm) return;
         if (!_isDragging || vm.State.IsPanelOpen) return;
 
-        var currentPoint = e.GetPosition(this);
-
-        // --- THROTTLE MANTIĞI ---
-        // Fare deli gibi hızlı hareket etse bile, ADB'ye en fazla 60 FPS hızında komut gönder.
+        // --- FRENLEME (THROTTLE) MANTIĞI ---
+        // Saniyede 120+ komut göndermek yerine, 16ms'de bir (60 FPS) komut gönder.
         var now = DateTime.Now;
         if ((now - _lastMoveTime).TotalMilliseconds < 16)
-            return; // 16ms (saniyenin 1/60'ı) geçmediyse bu hareketi atla
+            return;
 
         _lastMoveTime = now;
 
-        // MOVE gönder
+        var currentPoint = e.GetPosition(this);
         vm.MoveTouch(currentPoint.X, currentPoint.Y, RenderScaling);
-
         _lastMovePoint = currentPoint;
         e.Handled = true;
     }
@@ -81,16 +70,13 @@ public partial class OverlayWindow : Window
         _isDragging = false;
         var endPoint = e.GetPosition(this);
 
-        LogService.Info($"[Overlay] BIRAKILDI. Bitiş: {endPoint.X}, {endPoint.Y}");
-
-        // UP gönder
         vm.EndTouch(endPoint.X, endPoint.Y, RenderScaling);
 
         e.Pointer.Capture(null);
         e.Handled = true;
     }
 
-    // Grid veya Border olayları için eski köprüler (XAML'den hala çağrılıyorsa diye bırakıldı)
+    // XAML'den hala çağrılıyorsa diye eski köprüler
     public void OnGridPointerPressed(object? sender, PointerPressedEventArgs e) => OnBorderPointerPressed(sender, e);
     public void OnGridPointerMoved(object? sender, PointerEventArgs e) => OnBorderPointerMoved(sender, e);
     public void OnGridPointerReleased(object? sender, PointerReleasedEventArgs e) => OnBorderPointerReleased(sender, e);

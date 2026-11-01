@@ -64,8 +64,6 @@ public partial class MainWindowViewModel : ObservableObject
     // Dokunma Ölçekleme Değişkenleri
     private double _touchScaleX = 1.0;
     private double _touchScaleY = 1.0;
-    private int _touchTargetW = 1920;
-    private int _touchTargetH = 1080;
 
     public MainWindowViewModel()
     {
@@ -95,32 +93,27 @@ public partial class MainWindowViewModel : ObservableObject
         if (windowWidth <= 0 || windowHeight <= 0) return;
 
         var resolution = await AdbService.GetResolutionAsync();
-        _touchTargetW = resolution.Width;
-        _touchTargetH = resolution.Height;
-
-        await AdbService.InitializeTouchDeviceAsync();
-
-        _touchScaleX = (double)_touchTargetW / windowWidth;
-        _touchScaleY = (double)_touchTargetH / windowHeight;
+        _touchScaleX = (double)resolution.Width / windowWidth;
+        _touchScaleY = (double)resolution.Height / windowHeight;
 
         int tx = (int)(windowX * _touchScaleX);
         int ty = (int)(windowY * _touchScaleY);
 
-        AdbService.SendTouchDown(tx, ty, _touchTargetW, _touchTargetH);
+        AdbService.SendTouchDown(tx, ty);
     }
 
     public void MoveTouch(double windowX, double windowY, double scaling)
     {
         int tx = (int)(windowX * _touchScaleX);
         int ty = (int)(windowY * _touchScaleY);
-        AdbService.SendTouchMove(tx, ty, _touchTargetW, _touchTargetH);
+        AdbService.SendTouchMove(tx, ty);
     }
 
     public void EndTouch(double windowX, double windowY, double scaling)
     {
         int tx = (int)(windowX * _touchScaleX);
         int ty = (int)(windowY * _touchScaleY);
-        AdbService.SendTouchUp(tx, ty, _touchTargetW, _touchTargetH);
+        AdbService.SendTouchUp(tx, ty);
     }
 
     // --- OverlayWindow için Eski Metotlar ---
