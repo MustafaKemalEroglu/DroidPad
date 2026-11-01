@@ -9,10 +9,6 @@ namespace WaydroidController.Services;
 
 public class MacroEngine
 {
-    private readonly Action<string> _log;
-
-    public MacroEngine(Action<string> log) => _log = log;
-
     public async Task RunAsync(
         IReadOnlyList<MacroCommand> commands,
         IReadOnlyDictionary<string, Coordinate> coordinates,
@@ -21,7 +17,7 @@ public class MacroEngine
     {
         if (!await AdbService.EnsureConnectedAsync())
         {
-            _log("Hata: ADB bağlantısı kurulamadı!");
+            LogService.Error("Hata: ADB bağlantısı kurulamadı!");
             return;
         }
 
@@ -31,7 +27,7 @@ public class MacroEngine
         var scaleX = profileRes.Width > 0 ? (double)cw / profileRes.Width : 1.0;
         var scaleY = profileRes.Height > 0 ? (double)ch / profileRes.Height : 1.0;
 
-        _log($"Makro Başladı | Ekran: {cw}x{ch} | Ölçek: {scaleX:F2}x{scaleY:F2}");
+        LogService.Info($"Makro Başladı | Ekran: {cw}x{ch} | Ölçek: {scaleX:F2}x{scaleY:F2}");
 
         var hasInfiniteLoop = commands.OfType<LoopStartCommand>().Any(l => l.Count == -1);
 
@@ -51,7 +47,7 @@ public class MacroEngine
                         if (coordinates.TryGetValue(click.Target, out var c))
                             await AdbService.TapAsync((int)(c.X * scaleX), (int)(c.Y * scaleY));
                         else
-                            _log($"Hata: '{click.Target}' bulunamadı!");
+                            LogService.Error($"Hata: '{click.Target}' bulunamadı!");
                         i++;
                         break;
 

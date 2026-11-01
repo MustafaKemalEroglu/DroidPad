@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using WaydroidController.Models;
 
 namespace WaydroidController.Services;
@@ -7,16 +8,22 @@ public static class AdbService
 {
     #region Değişkenler ve Sabitler
     private static Process? _shellProcess;
-    private static readonly object _writeLock = new();   // Yazma işlemleri için kilit
-    private static readonly object _connectLock = new(); // Bağlantı işlemleri için kilit
+    private static readonly object _writeLock = new();
+    private static readonly object _connectLock = new();
     private static bool _isConnecting;
     private static string _activeDevice = "";
 
     private const string DefaultWaydroidIp = "192.168.240.112:5555";
     private static readonly string[] SizeSeparators = { "size:", "Size:" };
+
+    // Dokunmatik Ekran (sendevent) Değişkenleri
+    private static string _touchDevice = "";
+    private static int _maxX = 32767;
+    private static int _maxY = 32767;
+    private static bool _isTouchInitialized = false;
     #endregion
 
-    #region Bağlantı Yönetimi (Thread-Safe)
+    #region Bağlantı Yönetimi
 
     public static async Task<bool> EnsureConnectedAsync()
     {
@@ -30,12 +37,12 @@ public static class AdbService
 
         try
         {
-            LogManager.Log("ADB Bağlantısı başlatılıyor...");
+            LogService.Info("ADB Bağlantısı başlatılıyor...");
             _activeDevice = await GetConnectedDeviceAsync();
 
             if (string.IsNullOrEmpty(_activeDevice))
             {
-                LogManager.Log($"Cihaz bulunamadı, bağlanmaya çalışılıyor: {DefaultWaydroidIp}");
+                LogService.Info($"Cihaz bulunamadı, bağlanmaya çalışılıyor: {DefaultWaydroidIp}");
 
                 using var connectProcess = Process.Start(new ProcessStartInfo
                 {
@@ -51,16 +58,16 @@ public static class AdbService
 
             if (string.IsNullOrEmpty(_activeDevice))
             {
-                LogManager.Log("HATA: Waydroid bulunamadı veya ADB bağlanamadı!", isError: true);
+                LogService.Error("HATA: Waydroid bulunamadı veya ADB bağlanamadı!");
                 return false;
             }
 
-            LogManager.Log($"BAŞARILI: ADB Bağlantısı kuruldu -> {_activeDevice}");
+            LogService.Success($"BAŞARILI: ADB Bağlantısı kuruldu -> {_activeDevice}");
             return StartInteractiveShell();
         }
         catch (Exception ex)
         {
-            LogManager.Log($"ADB Bağlantı Hatası: {ex.Message}", isError: true);
+            LogService.Error($"ADB Bağlantı Hatası: {ex.Message}");
             return false;
         }
         finally
@@ -79,7 +86,7 @@ public static class AdbService
                 Arguments = $"-s {_activeDevice} shell",
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
-                RedirectStandardError = true, // Hataları yakalamak için
+                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
@@ -87,8 +94,7 @@ public static class AdbService
             _shellProcess = new Process { StartInfo = psi };
             _shellProcess.Start();
 
-            // ÇOK ÖNEMLİ: Arka planda çıktıyı sürekli oku. 
-            // Eğer okumazsak, işletim sistemi tamponu dolar ve adb donar (Deadlock).
+            // Çıktıyı sürekli oku (Deadlock önlemi)
             Task.Run(() => ReadShellOutput(_shellProcess.StandardOutput));
             Task.Run(() => ReadShellOutput(_shellProcess.StandardError));
 
@@ -96,7 +102,7 @@ public static class AdbService
         }
         catch (Exception ex)
         {
-            LogManager.Log($"Shell Başlatma Hatası: {ex.Message}", isError: true);
+            LogService.Error($"Shell Başlatma Hatası: {ex.Message}");
             return false;
         }
     }
@@ -105,14 +111,9 @@ public static class AdbService
     {
         try
         {
-            while (!reader.EndOfStream)
-            {
-                var line = reader.ReadLine();
-                // İsteğe bağlı: adb'den gelen gizli hataları konsola veya loga yazabilirsiniz
-                // if (!string.IsNullOrEmpty(line) && line.Contains("Error")) LogManager.Log($"[ADB Çıktı] {line}");
-            }
+            while (!reader.EndOfStream) reader.ReadLine();
         }
-        catch { /* Süreç öldüğünde fırlatılan istisnayı yoksay */ }
+        catch { }
     }
 
     private static async Task<string> GetConnectedDeviceAsync()
@@ -147,10 +148,7 @@ public static class AdbService
         return "";
     }
 
-    public static bool IsConnected()
-    {
-        return _shellProcess != null && !_shellProcess.HasExited;
-    }
+    public static bool IsConnected() => _shellProcess != null && !_shellProcess.HasExited;
 
     public static void Disconnect()
     {
@@ -167,7 +165,54 @@ public static class AdbService
 
     #endregion
 
-    #region Komut Gönderimi (Thread-Safe ve Sıfır Gecikme)
+    #region Dokunmatik Ekran Başlatma (Sendevent)
+
+    public static async Task InitializeTouchDeviceAsync()
+    {
+        if (_isTouchInitialized) return;
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "adb",
+                Arguments = $"-s {_activeDevice} shell getevent -pl",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var p = Process.Start(psi);
+            if (p == null) return;
+
+            var output = await p.StandardOutput.ReadToEndAsync();
+            await p.WaitForExitAsync();
+
+            // /dev/input/eventX yolunu bul
+            var deviceMatch = Regex.Match(output, @"add device \d+: (/dev/input/event\d+)");
+            if (deviceMatch.Success) _touchDevice = deviceMatch.Groups[1].Value;
+
+            // Maksimum X ve Y değerlerini bul (ABS_MT_POSITION_X / Y)
+            var xMatch = Regex.Match(output, @"0035  : value \d+, min \d+, max (\d+)");
+            if (xMatch.Success) _maxX = int.Parse(xMatch.Groups[1].Value);
+
+            var yMatch = Regex.Match(output, @"0036  : value \d+, min \d+, max (\d+)");
+            if (yMatch.Success) _maxY = int.Parse(yMatch.Groups[1].Value);
+
+            _isTouchInitialized = !string.IsNullOrEmpty(_touchDevice);
+            if (_isTouchInitialized)
+                LogService.Info($"[ADB] Sendevent Hazır: {_touchDevice} | X: {_maxX}, Y: {_maxY}");
+            else
+                LogService.Warning("[ADB] UYARI: Dokunmatik ekran bulunamadı, input komutuna dönülecek.");
+        }
+        catch (Exception ex)
+        {
+            LogService.Error($"[ADB] Dokunmatik başlatma hatası: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region Komut Gönderimi
 
     public static void SendCommand(string command)
     {
@@ -177,7 +222,6 @@ public static class AdbService
             return;
         }
 
-        // Aynı anda makro ve arayüzden komut gelirse çakışmasını önleyen kilit
         lock (_writeLock)
         {
             try
@@ -188,10 +232,9 @@ public static class AdbService
                     _shellProcess.StandardInput.Flush();
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                LogManager.Log($"ADB Komut Gönderme Hatası: {ex.Message}", isError: true);
-                Disconnect(); // Hata varsa bağlantıyı kopar ki bir sonraki istekte yeniden bağlansın
+                Disconnect();
             }
         }
     }
@@ -218,10 +261,42 @@ public static class AdbService
         return Task.CompletedTask;
     }
 
-    // --- Kesintisiz Sürükleme (Motionevent API) ---
-    public static void SendTouchDown(int x, int y) => SendCommand($"input motionevent DOWN {x} {y}");
-    public static void SendTouchMove(int x, int y) => SendCommand($"input motionevent MOVE {x} {y}");
-    public static void SendTouchUp(int x, int y) => SendCommand($"input motionevent UP {x} {y}");
+    // --- Sendevent Tabanlı Akıcı Dokunma ---
+
+    public static void SendTouchDown(int screenX, int screenY, int targetWidth, int targetHeight)
+    {
+        if (!_isTouchInitialized) { SendCommand($"input motionevent DOWN {screenX} {screenY}"); return; }
+
+        int rawX = (int)((long)screenX * _maxX / targetWidth);
+        int rawY = (int)((long)screenY * _maxY / targetHeight);
+
+        SendCommand($"sendevent {_touchDevice} 3 57 0");    // TRACKING_ID
+        SendCommand($"sendevent {_touchDevice} 3 53 {rawX}"); // X
+        SendCommand($"sendevent {_touchDevice} 3 54 {rawY}"); // Y
+        SendCommand($"sendevent {_touchDevice} 1 330 1");   // BTN_TOUCH DOWN
+        SendCommand($"sendevent {_touchDevice} 0 0 0");     // SYN_REPORT
+    }
+
+    public static void SendTouchMove(int screenX, int screenY, int targetWidth, int targetHeight)
+    {
+        if (!_isTouchInitialized) { SendCommand($"input motionevent MOVE {screenX} {screenY}"); return; }
+
+        int rawX = (int)((long)screenX * _maxX / targetWidth);
+        int rawY = (int)((long)screenY * _maxY / targetHeight);
+
+        SendCommand($"sendevent {_touchDevice} 3 53 {rawX}");
+        SendCommand($"sendevent {_touchDevice} 3 54 {rawY}");
+        SendCommand($"sendevent {_touchDevice} 0 0 0");     // SYN_REPORT
+    }
+
+    public static void SendTouchUp(int screenX, int screenY, int targetWidth, int targetHeight)
+    {
+        if (!_isTouchInitialized) { SendCommand($"input motionevent UP {screenX} {screenY}"); return; }
+
+        SendCommand($"sendevent {_touchDevice} 3 57 -1");   // TRACKING_ID -1
+        SendCommand($"sendevent {_touchDevice} 1 330 0");   // BTN_TOUCH UP
+        SendCommand($"sendevent {_touchDevice} 0 0 0");     // SYN_REPORT
+    }
 
     #endregion
 
@@ -251,7 +326,6 @@ public static class AdbService
                 var output = await p.StandardOutput.ReadToEndAsync();
                 await p.WaitForExitAsync();
 
-                // Gelişmiş Parse: Fiziksel ve Override boyutları arasında her zaman en sonuncuyu alır
                 var parts = output.Split(SizeSeparators, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length > 0)
                 {

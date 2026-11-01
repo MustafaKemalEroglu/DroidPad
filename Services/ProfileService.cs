@@ -114,7 +114,7 @@ public static class ProfileService
         }
         catch (Exception ex)
         {
-            LogManager.Log($"Profil Kaydetme Hatası: {ex.Message}", isError: true);
+            LogService.Error($"Profil Kaydetme Hatası: {ex.Message}");
         }
     }
 
@@ -133,7 +133,7 @@ public static class ProfileService
         }
         catch (Exception ex)
         {
-            LogManager.Log($"Profil Yükleme Hatası: {ex.Message}", isError: true);
+            LogService.Error($"Profil Yükleme Hatası: {ex.Message}");
             return null;
         }
     }

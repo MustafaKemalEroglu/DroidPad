@@ -13,7 +13,7 @@
         Topmost="True"
         WindowState="Maximized">
 
-    <Grid>
+    <Grid Background="Transparent">
         <!-- 0. Düzenleme Modu Aktifken Arka Planı Hafif Karartan Perde -->
         <Border Background="#44000000" IsVisible="{Binding State.IsPanelOpen}" IsHitTestVisible="False"/>
 

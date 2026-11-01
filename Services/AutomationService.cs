@@ -6,7 +6,7 @@ namespace WaydroidController.Services;
 
 public partial class AutomationService : ObservableObject
 {
-    private readonly MacroEngine _engine;
+    private readonly MacroEngine _engine = new MacroEngine();
     private CancellationTokenSource? _runCts;
     private CountdownService? _countdown;
 
@@ -14,11 +14,6 @@ public partial class AutomationService : ObservableObject
 
     public event Action<int>? OnCountdownTick;
     public event Action<string>? OnLog;
-
-    public AutomationService(MacroEngine engine)
-    {
-        _engine = engine;
-    }
 
     public async Task StartAsync(WorkspaceManager workspace, ResolutionDto resolution, bool useCountdown, int totalSeconds, bool stopCountdownOnStop)
     {
