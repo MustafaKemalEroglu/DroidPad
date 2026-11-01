@@ -150,8 +150,25 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void AddMuMuJoystick()
     {
-        if (!int.TryParse(JoystickRadius, out var radius)) return;
-        _keyMappingManager.AddJoystickGroup(JoystickPreset, radius, CoordX, CoordY);
+        if (!int.TryParse(JoystickRadius, out var radius))
+        {
+            LogService.Warning("Geçersiz joystick yarıçapı!");
+            return;
+        }
+
+        if (!int.TryParse(CoordX, out var x) || !int.TryParse(CoordY, out var y))
+        {
+            LogService.Warning("Geçersiz koordinat!");
+            return;
+        }
+
+        // KeyMappingManager üzerinden joystick ekle
+        _keyMappingManager.AddJoystickGroup(JoystickPreset, radius, x, y);
+
+        // Koleksiyonu yenile (UI güncellensin)
+        JoystickGroups.Clear();
+        foreach (var jg in _keyMappingManager.JoystickGroups)
+            JoystickGroups.Add(jg);
     }
     [RelayCommand] private void RemoveKeyBinding() { if (SelectedKeyBinding != null) KeyBindings.Remove(SelectedKeyBinding); }
     [RelayCommand] private void AddTapFromContextMenu() => LogService.Info("Sağ tık menüsünden Tap eklendi.");

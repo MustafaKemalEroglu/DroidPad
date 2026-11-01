@@ -139,7 +139,7 @@
         <!-- 4. Dikey Araç Çubuğu (Sidebar) -->
         <Border HorizontalAlignment="Right" VerticalAlignment="Stretch"
                 Background="#DD1E1E1E" BorderBrush="#333333" BorderThickness="1,0,0,0"
-                Padding="3,15,3,10" Width="44">
+                Padding="3,15,3,10" Width="40">
             <StackPanel Spacing="15" HorizontalAlignment="Center">
 
                 <Button Content="⌨" ToolTip.Tip="Tuş Atama Modunu Aç/Kapat (F12)"

@@ -46,17 +46,14 @@ public class KeyMappingManager
         LogService.Info($"[Konum] Yeni Tap tuşu eklendi: {keyChar} -> ({x}, {y})");
     }
     // Çember Joystick Grubu Ekleme
-    public void AddJoystickGroup(string preset, int radius, string coordX, string coordY)
+    public void AddJoystickGroup(string preset, int radius, int coordX, int coordY)
     {
-        int centerX = int.TryParse(coordX, out var parsedX) ? parsedX : 500;
-        int centerY = int.TryParse(coordY, out var parsedY) ? parsedY : 500;
-
         var (up, left, down, right) = GetPresetKeys(preset);
 
         JoystickGroups.Add(new JoystickGroup
         {
-            X = centerX,
-            Y = centerY,
+            X = coordX,
+            Y = coordY,
             Radius = radius,
             UpKey = up,
             LeftKey = left,
@@ -65,7 +62,7 @@ public class KeyMappingManager
             PresetName = preset
         });
 
-        LogService.Info($"[Joystick] Çember joystick eklendi ({preset}). Merkez: ({centerX}, {centerY})");
+        LogService.Info($"[Joystick] Çember joystick eklendi ({preset}). Merkez: ({coordX}, {coordY}), Yarıçap: {radius}");
     }
 
     public void RemoveBinding(KeyBinding? selectedBinding)
