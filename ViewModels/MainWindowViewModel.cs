@@ -171,8 +171,35 @@ public partial class MainWindowViewModel : ObservableObject
             JoystickGroups.Add(jg);
     }
     [RelayCommand] private void RemoveKeyBinding() { if (SelectedKeyBinding != null) KeyBindings.Remove(SelectedKeyBinding); }
-    [RelayCommand] private void AddTapFromContextMenu() => LogService.Info("Sağ tık menüsünden Tap eklendi.");
-    [RelayCommand] private void AddJoystickFromContextMenu() => LogService.Info("Sağ tık menüsünden Joystick eklendi.");
+    [RelayCommand]
+    private void AddTapFromContextMenu()
+    {
+        // ContextMenuX/Y zaten EditorState içinde mevcut
+        var tap = new KeyBinding
+        {
+            KeyName = "F",          // Varsayılan tuş; isterseniz bir sonraki adımda tuş seçimi eklenebilir
+            Type = KeyBindingType.Tap,
+            X = (int)State.ContextMenuX,
+            Y = (int)State.ContextMenuY
+        };
+        KeyBindings.Add(tap);
+        State.IsContextMenuOpen = false;
+        LogService.Info($"[Sağ Tık] Tap eklendi: ({tap.X}, {tap.Y})");
+    }
+
+    [RelayCommand]
+    private void AddJoystickFromContextMenu()
+    {
+        var joy = new JoystickGroup
+        {
+            X = (int)State.ContextMenuX,
+            Y = (int)State.ContextMenuY,
+            Radius = 70               // Varsayılan yarıçap
+        };
+        JoystickGroups.Add(joy);
+        State.IsContextMenuOpen = false;
+        LogService.Info($"[Sağ Tık] Joystick eklendi: ({joy.X}, {joy.Y})");
+    }
 
     [RelayCommand]
     private void AddCoordinate()
