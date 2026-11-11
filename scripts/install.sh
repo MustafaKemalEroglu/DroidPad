@@ -20,7 +20,8 @@ if [ "$missing" -eq 1 ]; then
 fi
 
 echo "→ Yayınlanıyor..."
-dotnet publish DroidPad.csproj -c Release -r linux-x64 --self-contained -o "$APP_DIR" >/dev/null
+rm -rf "$APP_DIR"
+dotnet publish DroidPad.csproj -c Release -r linux-x64 -o "$APP_DIR" >/dev/null
 
 mkdir -p "$BIN_DIR" "$DESKTOP_DIR"
 ln -sf "$APP_DIR/DroidPad" "$BIN_DIR/droidpad"

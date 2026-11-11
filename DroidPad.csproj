@@ -17,6 +17,14 @@
     <DebugType>none</DebugType>
   </PropertyGroup>
 
+  <!-- dotnet publish -c Release -r linux-x64 → tek yürütülebilir dosya (.NET çalışma zamanı dahil) -->
+  <PropertyGroup>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
   <ItemGroup>
     <EmbeddedResource Include="Helper\droidpad-input.dex" LogicalName="droidpad-input.dex" />
   </ItemGroup>
