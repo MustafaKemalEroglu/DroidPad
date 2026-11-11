@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,6 +20,7 @@ public static partial class AdbService
 {
     private const string DefaultAddress = "192.168.240.112:5555";
     private const string MoveCommand = "input motionevent MOVE";
+    private const string AckMarker = "@@";
 
     private static readonly SemaphoreSlim ConnectGate = new(1, 1);
     private static Session? _session;
@@ -73,7 +76,8 @@ public static partial class AdbService
             psi.ArgumentList.Add("shell");
 
             var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
-            proc.OutputDataReceived += static (_, _) => { };
+            Session? sessionRef = null;
+            proc.OutputDataReceived += (_, a) => { if (a.Data == AckMarker) sessionRef?.Ack(); };
             proc.ErrorDataReceived += static (_, _) => { };
             proc.Start();
             proc.BeginOutputReadLine();
@@ -82,6 +86,7 @@ public static partial class AdbService
             _device = device;
             _resolution = null;
             var session = new Session(proc);
+            sessionRef = session;
             _session = session;
             proc.Exited += (_, _) =>
             {
@@ -219,6 +224,52 @@ public static partial class AdbService
     [GeneratedRegex(@"mCurrentFocus=Window\{\S+ \S+ ([A-Za-z0-9_.]+)/")]
     private static partial Regex FocusRegex();
 
+    // ---------------- Araçlar (ekran görüntüsü, APK) ----------------
+
+    /// <summary>Ekran görüntüsünü PNG olarak kaydeder; başarılıysa dosya yolunu döndürür.</summary>
+    public static async Task<string?> ScreenshotAsync(string directory)
+    {
+        if (!await EnsureConnectedAsync()) return null;
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var path = Path.Combine(directory, $"DroidPad_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+            var psi = new ProcessStartInfo("adb")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardInput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            foreach (var a in new[] { "-s", _device, "exec-out", "screencap", "-p" }) psi.ArgumentList.Add(a);
+            using var p = Process.Start(psi);
+            if (p is null) return null;
+            p.StandardInput.Close();
+
+            using var cts = new CancellationTokenSource(10000);
+            await using (var fs = File.Create(path))
+                await p.StandardOutput.BaseStream.CopyToAsync(fs, cts.Token);
+            await p.WaitForExitAsync(cts.Token);
+            if (p.ExitCode == 0 && new FileInfo(path).Length > 0) return path;
+            File.Delete(path);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            LogService.Error($"Ekran görüntüsü hatası: {ex.Message}");
+            return null;
+        }
+    }
+
+    public static async Task<bool> InstallApkAsync(string apkPath)
+    {
+        if (!await EnsureConnectedAsync()) return false;
+        var (code, output) = await RunAsync("adb", $"-s {_device} install -r \"{apkPath}\"", 180000);
+        if (code == 0 && output.Contains("Success", StringComparison.OrdinalIgnoreCase)) return true;
+        LogService.Error($"APK kurulamadı: {output.Trim()}");
+        return false;
+    }
+
     // ---------------- Komutlar ----------------
 
     public static void Send(string command)
@@ -238,8 +289,21 @@ public static partial class AdbService
     /// <summary>background=true: komut cihazda arka planda koşar, sıradaki komutu beklemez.</summary>
     public static void Tap(int x, int y, bool background = true) => Send($"input tap {x} {y}{(background ? " &" : "")}");
 
-    public static void Swipe(int x1, int y1, int x2, int y2, int durationMs = 300) =>
-        Send($"input swipe {x1} {y1} {x2} {y2} {durationMs} &");
+    public static void Swipe(int x1, int y1, int x2, int y2, int durationMs = 300, bool background = true) =>
+        Send($"input swipe {x1} {y1} {x2} {y2} {durationMs}{(background ? " &" : "")}");
+
+    /// <summary>Aynı noktada uzun süre kalan "swipe" uzun basma sayılır.</summary>
+    public static void LongPress(int x, int y, int durationMs) => Swipe(x, y, x, y, durationMs);
+
+    /// <summary>"input text" yalnızca ASCII destekler; boşluk %s, kabuk özel karakterleri tırnaklanır.</summary>
+    public static void Text(string text)
+    {
+        var ascii = new string(text.Where(c => c is >= ' ' and <= '~').ToArray());
+        if (ascii.Length != text.Length) LogService.Warning("Metindeki ASCII olmayan karakterler atlandı.");
+        if (ascii.Length == 0) return;
+        var escaped = ascii.Replace("%", "%%").Replace(" ", "%s").Replace("'", "'\\''");
+        Send($"input text '{escaped}'");
+    }
 
     public static void KeyEvent(string keycode)
     {
@@ -263,7 +327,18 @@ public static partial class AdbService
         private readonly LinkedList<string> _queue = new();
         private readonly object _lock = new();
         private bool _closing;
+        private int _pendingMoves;
         private readonly Thread _thread;
+
+        /// <summary>Kabuk bir MOVE'u işleyince çağrılır; bir sonraki (en güncel) MOVE gönderilebilir.</summary>
+        public void Ack()
+        {
+            lock (_lock)
+            {
+                if (_pendingMoves > 0) _pendingMoves--;
+                Monitor.PulseAll(_lock);
+            }
+        }
 
         public Session(Process proc)
         {
@@ -309,13 +384,29 @@ public static partial class AdbService
                     string cmd;
                     lock (_lock)
                     {
-                        while (_queue.Count == 0)
+                        while (true)
                         {
-                            if (_closing) return;
-                            Monitor.Wait(_lock);
+                            if (_queue.Count == 0)
+                            {
+                                if (_closing) return;
+                                Monitor.Wait(_lock);
+                                continue;
+                            }
+                            // Kabuk önceki MOVE'u bitirmeden yenisini yazma: bekleyenler birleşsin, gecikme birikmesin
+                            if (_queue.First!.Value.StartsWith(MoveCommand, StringComparison.Ordinal) && _pendingMoves >= 1 && !_closing)
+                            {
+                                if (!Monitor.Wait(_lock, 250)) _pendingMoves = 0; // onay kaybolduysa takılma
+                                continue;
+                            }
+                            break;
                         }
                         cmd = _queue.First!.Value;
                         _queue.RemoveFirst();
+                        if (cmd.StartsWith(MoveCommand, StringComparison.Ordinal))
+                        {
+                            _pendingMoves++;
+                            cmd += $"; echo {AckMarker}";
+                        }
                     }
                     _proc.StandardInput.WriteLine(cmd);
                     _proc.StandardInput.Flush();
