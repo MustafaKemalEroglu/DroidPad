@@ -43,8 +43,8 @@ public partial class OverlayWindow : Window
         ItemsLayer.AddHandler(PointerReleasedEvent, OnItemReleased, RoutingStrategies.Bubble);
 
         AddHandler(PointerPressedEvent, OnWindowRightPressed, RoutingStrategies.Tunnel);
-        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Bubble);
-        AddHandler(KeyUpEvent, OnWindowKeyUp, RoutingStrategies.Bubble);
+        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel); // Tab vb. odak tuşlarını kontrollerden önce yakala
+        AddHandler(KeyUpEvent, OnWindowKeyUp, RoutingStrategies.Tunnel);
         Deactivated += (_, _) => Vm?.ReleaseAllKeys();
         Closing += (_, _) => Vm?.Shutdown();
 
