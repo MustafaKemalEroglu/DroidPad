@@ -4,6 +4,7 @@
         xmlns:m="using:WaydroidController.Models"
         x:Class="WaydroidController.Views.OverlayWindow"
         x:DataType="vm:MainWindowViewModel"
+        x:CompileBindings="True"
         Title="Waydroid Controller"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
@@ -12,120 +13,277 @@
         Topmost="True"
         WindowState="Maximized">
 
-    <!-- Ana Grid fare olaylarını yakalar -->
-    <Grid Background="Transparent"
-          PointerPressed="OnMainPointerPressed"
-          PointerMoved="OnMainPointerMoved"
-          PointerReleased="OnMainPointerReleased">
+    <Grid x:Name="Root" Background="Transparent">
 
-        <!-- 0. Düzenleme Modu Karartma -->
-        <Border Background="#44000000" IsVisible="{Binding State.IsPanelOpen}" IsHitTestVisible="False"/>
+        <!-- 0. Oyun yüzeyi: dokunmayı Android'e iletir -->
+        <Border x:Name="Surface" Background="Transparent"/>
 
-        <!-- 1. Tap Tuşları -->
-        <ItemsControl ItemsSource="{Binding KeyBindings}">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <Canvas Background="Transparent"/>
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.Styles>
-                <Style Selector="ContentPresenter" x:DataType="m:KeyBinding">
-                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
-                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
-                </Style>
-            </ItemsControl.Styles>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <Border Width="42" Height="42" CornerRadius="21"
-                            BorderThickness="1.5"
-                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Classes.pressed="{Binding IsPressed}"
-                            Tag="{Binding}">
-                        <Border.Styles>
-                            <Style Selector="Border">
-                                <Setter Property="Background" Value="#AA1E1E1E"/>
-                                <Setter Property="BorderBrush" Value="#00FFCC"/>
-                            </Style>
-                            <Style Selector="Border.pressed">
-                                <Setter Property="Background" Value="#B300FF66"/>
-                                <Setter Property="BorderBrush" Value="#FFFFFF"/>
-                            </Style>
-                        </Border.Styles>
-                        <TextBlock Text="{Binding KeyName}" Foreground="#FFFFFF"
-                                   FontFamily="Consolas" FontSize="14" FontWeight="Bold"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   IsHitTestVisible="False"/>
-                    </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <!-- 1. Düzenleme modu karartması -->
+        <Border Background="#55000000" IsVisible="{Binding State.IsEditMode}" IsHitTestVisible="False"/>
 
-        <!-- 2. Joystick Grupları -->
-        <ItemsControl ItemsSource="{Binding JoystickGroups}">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <Canvas Background="Transparent"/>
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.Styles>
-                <Style Selector="ContentPresenter" x:DataType="m:JoystickGroup">
-                    <Setter Property="Canvas.Left" Value="{Binding X}"/>
-                    <Setter Property="Canvas.Top" Value="{Binding Y}"/>
-                </Style>
-            </ItemsControl.Styles>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <Grid Width="140" Height="140" Margin="-70,-70,0,0" Background="Transparent" Tag="{Binding}">
-                        <Ellipse Width="140" Height="140" Stroke="#00FFCC" StrokeThickness="2" Fill="#221E1E1E" IsHitTestVisible="False"/>
-                        <!-- Yön tuşları aynı, sadece örnek olarak bırakıldı -->
-                        <Border Width="36" Height="36" CornerRadius="18" Background="#AA1E1E1E" BorderBrush="#00FFCC" BorderThickness="1.5"
-                                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0" IsHitTestVisible="False">
-                            <TextBlock Text="{Binding UpKey}" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <!-- Diğer yönler... -->
-                    </Grid>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <!-- 2. Tuş eşlemeleri (cihaz koordinat uzayında çizilir, Viewbox ekrana ölçekler) -->
+        <Viewbox x:Name="ItemsLayer" Stretch="Fill"
+                 IsVisible="{Binding State.ItemsVisible}"
+                 IsHitTestVisible="{Binding State.IsEditMode}"
+                 Classes.game="{Binding !State.IsEditMode}">
+            <Grid Width="{Binding DeviceWidth}" Height="{Binding DeviceHeight}">
 
-        <!-- 3. Sağ Tık Menüsü -->
-        <Border IsVisible="{Binding State.IsContextMenuOpen}"
-                HorizontalAlignment="Left" VerticalAlignment="Top"
-                Width="160" Background="#DD242424" BorderBrush="#444" BorderThickness="1" CornerRadius="6" Padding="6"
-                ZIndex="1000">
+                <ItemsControl ItemsSource="{Binding JoystickGroups}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                        <Style Selector="ContentPresenter" x:DataType="m:JoystickGroup">
+                            <Setter Property="Canvas.Left" Value="{Binding Left}"/>
+                            <Setter Property="Canvas.Top" Value="{Binding Top}"/>
+                        </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="m:JoystickGroup">
+                            <Grid Width="{Binding Diameter}" Height="{Binding Diameter}" Background="Transparent">
+                                <Ellipse Classes="ring" Classes.selected="{Binding IsSelected}"
+                                         StrokeThickness="3" Fill="#331B1E24"/>
+                                <Border Classes="dirkey" Classes.pressed="{Binding IsUpPressed}" Width="40" Height="40" CornerRadius="20"
+                                        HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0">
+                                    <TextBlock Text="{Binding UpLabel}" Foreground="White" FontSize="15" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <Border Classes="dirkey" Classes.pressed="{Binding IsDownPressed}" Width="40" Height="40" CornerRadius="20"
+                                        HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,8">
+                                    <TextBlock Text="{Binding DownLabel}" Foreground="White" FontSize="15" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <Border Classes="dirkey" Classes.pressed="{Binding IsLeftPressed}" Width="40" Height="40" CornerRadius="20"
+                                        HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0">
+                                    <TextBlock Text="{Binding LeftLabel}" Foreground="White" FontSize="15" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <Border Classes="dirkey" Classes.pressed="{Binding IsRightPressed}" Width="40" Height="40" CornerRadius="20"
+                                        HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <TextBlock Text="{Binding RightLabel}" Foreground="White" FontSize="15" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <Ellipse Width="26" Height="26" Fill="#CC5EEAD4" IsHitTestVisible="False">
+                                    <Ellipse.RenderTransform>
+                                        <TranslateTransform X="{Binding ThumbDx}" Y="{Binding ThumbDy}"/>
+                                    </Ellipse.RenderTransform>
+                                </Ellipse>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ItemsControl ItemsSource="{Binding KeyBindings}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><Canvas/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                        <Style Selector="ContentPresenter" x:DataType="m:KeyBinding">
+                            <Setter Property="Canvas.Left" Value="{Binding Left}"/>
+                            <Setter Property="Canvas.Top" Value="{Binding Top}"/>
+                        </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="m:KeyBinding">
+                            <Border Classes="key" Classes.pressed="{Binding IsPressed}" Classes.selected="{Binding IsSelected}"
+                                    Width="46" Height="46" CornerRadius="23">
+                                <TextBlock Text="{Binding KeyLabel}" Foreground="White" FontSize="16" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Viewbox>
+
+        <!-- 3. Üst durum rozetleri -->
+        <StackPanel VerticalAlignment="Top" HorizontalAlignment="Center" Spacing="6" Margin="0,14,0,0" IsHitTestVisible="False">
+            <Border Background="#E62F6FED" IsVisible="{Binding State.IsEditMode}" Padding="14,7" CornerRadius="8">
+                <TextBlock Foreground="White" FontWeight="SemiBold" FontSize="12"
+                           Text="Tuş Eşleme  ·  Sağ tık: öğe ekle  ·  Sürükle: taşı  ·  Del: sil  ·  F12: kapat"/>
+            </Border>
+            <Border Background="#E6D98E04" IsVisible="{Binding State.IsWaitingForKey}" Padding="14,7" CornerRadius="8">
+                <TextBlock Foreground="Black" FontWeight="Bold" FontSize="13" Text="{Binding State.RebindHint}"/>
+            </Border>
+            <Border Background="#E6D98E04" IsVisible="{Binding State.IsPicking}" Padding="14,7" CornerRadius="8">
+                <TextBlock Foreground="Black" FontWeight="Bold" FontSize="13" Text="🎯 Koordinat için ekranda bir noktaya tıklayın  (Esc: iptal)"/>
+            </Border>
+            <Border Background="#E6D64550" IsVisible="{Binding State.IsRecording}" Padding="14,7" CornerRadius="8">
+                <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" Text="⏺ Makro kaydediliyor — ekranda tıklayın / kaydırın"/>
+            </Border>
+            <Border Background="#E61F9D5B" IsVisible="{Binding State.IsRunning}" Padding="14,7" CornerRadius="8">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" Text="▶ Makro çalışıyor  (F9: durdur)"/>
+                    <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" Text="{Binding RemainingText}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- 4. Sağ tık menüsü -->
+        <Border IsVisible="{Binding State.IsContextMenuOpen}" ZIndex="1000"
+                HorizontalAlignment="Left" VerticalAlignment="Top" Width="190"
+                Background="#F01B1E24" BorderBrush="#343944" BorderThickness="1" CornerRadius="8" Padding="6">
             <Border.RenderTransform>
                 <TranslateTransform X="{Binding State.ContextMenuX}" Y="{Binding State.ContextMenuY}"/>
             </Border.RenderTransform>
             <StackPanel Spacing="4">
-                <TextBlock Text="Tuş Ekle" Foreground="#888" FontSize="11" FontWeight="Bold" Margin="4,2"/>
-                <Button Content="➕ Tap (Dokunma) Ekle" Command="{Binding AddTapFromContextMenuCommand}"/>
-                <Button Content="🎮 Joystick (WASD) Ekle" Command="{Binding AddJoystickFromContextMenuCommand}"/>
+                <TextBlock Classes="section" Text="BURAYA EKLE"/>
+                <Button Classes="tool" Content="⊙  Tuş (Tap)" Command="{Binding AddFromContextMenuCommand}" CommandParameter="tap"/>
+                <Button Classes="tool" Content="✥  Joystick (WASD)" Command="{Binding AddFromContextMenuCommand}" CommandParameter="wasd"/>
+                <Button Classes="tool" Content="✥  Joystick (Oklar)" Command="{Binding AddFromContextMenuCommand}" CommandParameter="arrows"/>
             </StackPanel>
         </Border>
 
-        <!-- 4. Sidebar (Aynen korundu) -->
-        <Border HorizontalAlignment="Right" VerticalAlignment="Stretch"
-                Background="#DD1E1E1E" BorderBrush="#333333" BorderThickness="1,0,0,0"
-                Padding="3,15,3,10" Width="40">
-            <StackPanel Spacing="15" HorizontalAlignment="Center">
-                <Button Content="⌨" ToolTip.Tip="Tuş Atama Modunu Aç/Kapat (F12)"
-                        Classes="primary" Width="38" Height="38" FontSize="16"
-                        Command="{Binding TogglePanelCommand}"/>
-                <Separator Background="#444" Height="1" Margin="2,0"/>
-                <Button Content="🎯" ToolTip.Tip="Koordinat Seç"
-                        Classes="neutral" Width="38" Height="38" FontSize="14"
-                        Command="{Binding StartPickingCoordinateCommand}"/>
-                <Button Content="⚙" ToolTip.Tip="Ayarlar"
-                        Classes="neutral" Width="38" Height="38" FontSize="14"/>
-            </StackPanel>
+        <!-- 5. Yan panel -->
+        <Border IsVisible="{Binding State.IsAnyPanel}" HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                Width="310" Margin="0,10,60,10" Background="#F2181A1F" BorderBrush="#2A2E37" BorderThickness="1" CornerRadius="12">
+            <Grid>
+                <!-- TUŞ EŞLEME -->
+                <ScrollViewer IsVisible="{Binding State.IsKeysPanel}" Padding="14">
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="title" Text="⌨  Tuş Eşleme"/>
+                        <TextBlock Classes="hint" Text="Bir araç seçip ekrana tıklayın veya boş alana sağ tıklayın. Öğeleri sürükleyerek taşıyın."/>
+
+                        <TextBlock Classes="section" Text="ARAÇLAR"/>
+                        <Button Classes="tool" Classes.active="{Binding State.PendingTool, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=tap}"
+                                Content="⊙   Tuş (Tap)" Command="{Binding SelectToolCommand}" CommandParameter="tap"/>
+                        <Button Classes="tool" Classes.active="{Binding State.PendingTool, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=wasd}"
+                                Content="✥   Joystick (WASD)" Command="{Binding SelectToolCommand}" CommandParameter="wasd"/>
+                        <Button Classes="tool" Classes.active="{Binding State.PendingTool, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=arrows}"
+                                Content="✥   Joystick (Oklar)" Command="{Binding SelectToolCommand}" CommandParameter="arrows"/>
+                        <Button Classes="tool" Classes.active="{Binding State.PendingTool, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=numpad}"
+                                Content="✥   Joystick (Numpad)" Command="{Binding SelectToolCommand}" CommandParameter="numpad"/>
+
+                        <TextBlock Classes="section" Text="SEÇİLİ ÖĞE"/>
+                        <TextBlock Classes="hint" Text="Düzenlemek için bir tuşa veya joystick'e tıklayın." IsVisible="{Binding !HasSelection}"/>
+
+                        <StackPanel Spacing="6" IsVisible="{Binding IsTapSelected}">
+                            <Button Classes="primary" Content="{Binding SelectedTap.KeyLabel, StringFormat='Tuş: {0}   —   değiştir'}"
+                                    Command="{Binding BeginRebindCommand}" CommandParameter="key"/>
+                        </StackPanel>
+
+                        <StackPanel Spacing="6" IsVisible="{Binding IsJoystickSelected}">
+                            <UniformGrid Columns="4">
+                                <Button Margin="2" Content="{Binding SelectedJoystick.UpLabel, StringFormat='↑ {0}'}" Command="{Binding BeginRebindCommand}" CommandParameter="up"/>
+                                <Button Margin="2" Content="{Binding SelectedJoystick.LeftLabel, StringFormat='← {0}'}" Command="{Binding BeginRebindCommand}" CommandParameter="left"/>
+                                <Button Margin="2" Content="{Binding SelectedJoystick.DownLabel, StringFormat='↓ {0}'}" Command="{Binding BeginRebindCommand}" CommandParameter="down"/>
+                                <Button Margin="2" Content="{Binding SelectedJoystick.RightLabel, StringFormat='→ {0}'}" Command="{Binding BeginRebindCommand}" CommandParameter="right"/>
+                            </UniformGrid>
+                            <TextBlock Classes="hint" Text="Yön tuşlarına tıklayıp yeni tuşa basın."/>
+                            <TextBlock Classes="section" Text="YARIÇAP"/>
+                            <Slider Minimum="40" Maximum="260" Value="{Binding SelectedJoystick.Radius}"/>
+                        </StackPanel>
+
+                        <Button Classes="danger" Content="🗑  Seçiliyi Sil (Del)" Command="{Binding DeleteSelectedCommand}" IsVisible="{Binding HasSelection}"/>
+
+                        <TextBlock Classes="section" Text="PROFİL"/>
+                        <UniformGrid Columns="2">
+                            <Button Margin="2" Classes="primary" Content="💾 Kaydet" Click="OnSaveProfileClick"/>
+                            <Button Margin="2" Content="📂 Yükle" Click="OnLoadProfileClick"/>
+                        </UniformGrid>
+                        <Button Content="Tüm Eşlemeleri Temizle" Command="{Binding ClearMappingsCommand}"/>
+                        <CheckBox Content="Oyun modunda tuşları göster" IsChecked="{Binding State.ShowKeys}"/>
+                        <TextBlock Classes="hint" Text="Değişiklikler panel kapanınca ve çıkışta otomatik kaydedilir."/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- MAKRO -->
+                <ScrollViewer IsVisible="{Binding State.IsMacroPanel}" Padding="14">
+                    <StackPanel Spacing="8">
+                        <TextBlock Classes="title" Text="▶  Makro"/>
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Button Classes="success" Content="▶  Başlat  (F9)" Command="{Binding StartCommand}" IsVisible="{Binding !IsRunning}"/>
+                            <Button Classes="danger" Content="■  Durdur  (F9)" Command="{Binding StopCommand}" IsVisible="{Binding IsRunning}"/>
+                            <Button Grid.Column="1" Margin="6,0,0,0" Content="⏺ Kaydet" ToolTip.Tip="Ekrandaki tıklama ve kaydırmaları makroya kaydeder"
+                                    Classes.danger="{Binding State.IsRecording}" Command="{Binding ToggleRecordingCommand}"/>
+                        </Grid>
+
+                        <CheckBox Content="Süre sınırı (dolunca makro durur)" IsChecked="{Binding EnableCountdown}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding EnableCountdown}">
+                            <NumericUpDown Width="86" Minimum="0" Maximum="99" FormatString="0" ShowButtonSpinner="False" Value="{Binding CdHours}" PlaceholderText="sa"/>
+                            <NumericUpDown Width="86" Minimum="0" Maximum="59" FormatString="0" ShowButtonSpinner="False" Value="{Binding CdMinutes}" PlaceholderText="dk"/>
+                            <NumericUpDown Width="86" Minimum="0" Maximum="59" FormatString="0" ShowButtonSpinner="False" Value="{Binding CdSeconds}" PlaceholderText="sn"/>
+                        </StackPanel>
+
+                        <TextBlock Classes="section" Text="KOMUTLAR"/>
+                        <ListBox ItemsSource="{Binding Commands}" SelectedItem="{Binding SelectedCommand}" MinHeight="90" MaxHeight="190">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="m:MacroCommand">
+                                    <TextBlock Text="{Binding Description}" FontFamily="monospace" FontSize="12"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <UniformGrid Columns="4">
+                            <Button Margin="2" Content="↑" Command="{Binding MoveCommandUpCommand}"/>
+                            <Button Margin="2" Content="↓" Command="{Binding MoveCommandDownCommand}"/>
+                            <Button Margin="2" Classes="danger" Content="✕" Command="{Binding RemoveCommandCommand}"/>
+                            <Button Margin="2" Content="Temizle" Command="{Binding ClearCommandsCommand}"/>
+                        </UniformGrid>
+
+                        <Grid ColumnDefinitions="100,*,Auto" ColumnSpacing="4">
+                            <ComboBox ItemsSource="{Binding CmdTypes}" SelectedItem="{Binding CmdType}" HorizontalAlignment="Stretch"/>
+                            <TextBox Grid.Column="1" Text="{Binding CmdValue}"/>
+                            <Button Grid.Column="2" Classes="primary" Content="Ekle" Command="{Binding AddCommandCommand}"/>
+                        </Grid>
+
+                        <TextBlock Classes="section" Text="KOORDİNATLAR"/>
+                        <ListBox ItemsSource="{Binding Coordinates}" SelectedItem="{Binding SelectedCoordinate}" MinHeight="60" MaxHeight="130">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="m:Coordinate">
+                                    <TextBlock Text="{Binding DisplayText}" FontFamily="monospace" FontSize="12"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <Grid ColumnDefinitions="*,56,56" ColumnSpacing="4">
+                            <TextBox Text="{Binding CoordName}" PlaceholderText="ad"/>
+                            <TextBox Grid.Column="1" Text="{Binding CoordX}" PlaceholderText="x"/>
+                            <TextBox Grid.Column="2" Text="{Binding CoordY}" PlaceholderText="y"/>
+                        </Grid>
+                        <UniformGrid Columns="3">
+                            <Button Margin="2" Content="🎯 Seç" Command="{Binding StartPickingCommand}"/>
+                            <Button Margin="2" Classes="primary" Content="Ekle" Command="{Binding AddCoordinateCommand}"/>
+                            <Button Margin="2" Classes="danger" Content="Sil" Command="{Binding RemoveCoordinateCommand}"/>
+                        </UniformGrid>
+
+                        <TextBlock Classes="section" Text="PROFİL"/>
+                        <UniformGrid Columns="2">
+                            <Button Margin="2" Classes="primary" Content="💾 Kaydet" Click="OnSaveProfileClick"/>
+                            <Button Margin="2" Content="📂 Yükle" Click="OnLoadProfileClick"/>
+                        </UniformGrid>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- GÜNLÜK -->
+                <Grid IsVisible="{Binding State.IsLogPanel}" Margin="14" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="8">
+                    <TextBlock Classes="title" Text="☰  Günlük &amp; Bağlantı"/>
+                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <Ellipse Classes="conn" Width="10" Height="10" VerticalAlignment="Center" Classes.on="{Binding IsAdbConnected}"/>
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="12" Foreground="#E8EAF0" Text="{Binding ConnectionText}"/>
+                        <Button Grid.Column="2" Content="Yeniden bağlan" Command="{Binding ConnectCommand}"/>
+                    </Grid>
+                    <ListBox x:Name="LogList" Grid.Row="2" ItemsSource="{Binding Log}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="m:LogEntry">
+                                <TextBlock Text="{Binding Text}" Foreground="{Binding ColorHex}" FontFamily="monospace" FontSize="11" TextWrapping="Wrap"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <Button Grid.Row="3" Content="Günlüğü Temizle" Click="OnClearLogClick"/>
+                </Grid>
+            </Grid>
         </Border>
 
-        <!-- 5. Bilgi Bandı -->
-        <StackPanel VerticalAlignment="Top" HorizontalAlignment="Center" Spacing="5" Margin="0,15,0,0" ZIndex="999">
-            <Border Background="#CC0066FF" IsVisible="{Binding State.IsPanelOpen}" Padding="15,6" CornerRadius="6">
-                <TextBlock Text="💡 Düzenleme Modu (F12): Sağ tık menü, sürükle-bırak aktif."
-                           Foreground="White" FontWeight="SemiBold" FontSize="12"/>
-            </Border>
-        </StackPanel>
+        <!-- 6. Kenar çubuğu -->
+        <Border HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"
+                Background="#F2181A1F" BorderBrush="#2A2E37" BorderThickness="1" CornerRadius="14" Padding="6">
+            <StackPanel Spacing="6">
+                <Button x:Name="KeysButton" Classes="side" Content="⌨" ToolTip.Tip="Tuş Eşleme (F12)"
+                        Classes.active="{Binding State.IsKeysPanel}"
+                        Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:PanelKind.Keys}"/>
+                <Button Classes="side" Content="▶" ToolTip.Tip="Makro (F11)"
+                        Classes.active="{Binding State.IsMacroPanel}"
+                        Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:PanelKind.Macro}"/>
+                <Button Classes="side" Content="☰" ToolTip.Tip="Günlük (F10)"
+                        Classes.active="{Binding State.IsLogPanel}"
+                        Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:PanelKind.Log}"/>
+                <Border Height="1" Background="#2A2E37" Margin="4,2"/>
+                <Ellipse Classes="conn" Width="9" Height="9" HorizontalAlignment="Center" Classes.on="{Binding IsAdbConnected}"
+                         ToolTip.Tip="{Binding ConnectionText}"/>
+                <Button Classes="side" Content="✕" ToolTip.Tip="Çıkış" Click="OnExitClick"/>
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

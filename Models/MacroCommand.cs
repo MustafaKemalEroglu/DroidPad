@@ -12,48 +12,48 @@ namespace WaydroidController.Models;
 [JsonDerivedType(typeof(LoopEndCommand), "loop_end")]
 public abstract class MacroCommand
 {
-    public abstract string Description { get; }
+    [JsonIgnore] public abstract string Description { get; }
 }
 
 public sealed class ClickCommand : MacroCommand
 {
     public string Target { get; set; } = "";
-    public override string Description => $"CLICK → {Target}";
+    [JsonIgnore] public override string Description => $"CLICK → {Target}";
 }
 
 public sealed class SwipeCommand : MacroCommand
 {
     public string Start { get; set; } = "";
     public string End { get; set; } = "";
-    public override string Description => $"SWIPE → {Start} ➔ {End}";
+    [JsonIgnore] public override string Description => $"SWIPE → {Start} ➔ {End}";
 }
 
 public sealed class WaitCommand : MacroCommand
 {
     public double Seconds { get; set; }
-    public override string Description => $"WAIT → {Seconds} sn";
+    [JsonIgnore] public override string Description => $"WAIT → {Seconds:0.##} sn";
 }
 
 public sealed class RandomWaitCommand : MacroCommand
 {
     public double Min { get; set; }
     public double Max { get; set; }
-    public override string Description => $"RANDOM WAIT → {Min} - {Max} sn";
+    [JsonIgnore] public override string Description => $"RANDOM WAIT → {Min:0.##} - {Max:0.##} sn";
 }
 
 public sealed class KeyCommand : MacroCommand
 {
     public string Keycode { get; set; } = "";
-    public override string Description => $"KEY → {Keycode}";
+    [JsonIgnore] public override string Description => $"KEY → {Keycode}";
 }
 
 public sealed class LoopStartCommand : MacroCommand
 {
     public int Count { get; set; }
-    public override string Description => $"LOOP START → {(Count == -1 ? "∞" : Count)}";
+    [JsonIgnore] public override string Description => $"LOOP START → {(Count == -1 ? "∞" : Count)}";
 }
 
 public sealed class LoopEndCommand : MacroCommand
 {
-    public override string Description => "LOOP END";
+    [JsonIgnore] public override string Description => "LOOP END";
 }

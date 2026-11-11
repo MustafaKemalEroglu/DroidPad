@@ -1,92 +1,97 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Genel Arkaplan -->
-    <Style Selector="Window">
-        <Setter Property="Background" Value="#242424"/>
+    <Style Selector="TextBox, ComboBox, NumericUpDown">
+        <Setter Property="Background" Value="#22262E"/>
+        <Setter Property="Foreground" Value="#E8EAF0"/>
+        <Setter Property="BorderBrush" Value="#343944"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="MinHeight" Value="30"/>
+        <Setter Property="Padding" Value="8,4"/>
+        <Setter Property="FontSize" Value="12"/>
     </Style>
 
-    <!-- TextBox / ComboBox Stilleri -->
-    <Style Selector="TextBox, ComboBox">
-        <Setter Property="Background" Value="#2b2b2b"/>
-        <Setter Property="Foreground" Value="White"/>
-        <Setter Property="BorderBrush" Value="#444444"/>
-        <Setter Property="CornerRadius" Value="4"/>
-        <Setter Property="Padding" Value="8,5"/>
-        <Setter Property="Margin" Value="0,2"/>
-    </Style>
-
-    <!-- Buton Temel Stili -->
     <Style Selector="Button">
-        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="CornerRadius" Value="6"/>
         <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="FontSize" Value="12"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="HorizontalAlignment" Value="Stretch"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Background" Value="#2A2F39"/>
+        <Setter Property="Foreground" Value="#E8EAF0"/>
     </Style>
-
-    <!-- Mavi Buton (Profil, Ekle) -->
-    <Style Selector="Button.primary">
-        <Setter Property="Background" Value="#1f538d"/>
+    <Style Selector="Button:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#363C49"/>
         <Setter Property="Foreground" Value="White"/>
     </Style>
-    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="#2b5278"/>
-    </Style>
 
-    <!-- Yeşil Buton (Başlat, Koordinat Ekle) -->
-    <Style Selector="Button.success">
-        <Setter Property="Background" Value="#198754"/>
-        <Setter Property="Foreground" Value="White"/>
-    </Style>
-    <Style Selector="Button.success:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="#146c43"/>
-    </Style>
+    <Style Selector="Button.primary"><Setter Property="Background" Value="#2F6FED"/><Setter Property="Foreground" Value="White"/></Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#4A85F5"/></Style>
+    <Style Selector="Button.success"><Setter Property="Background" Value="#1F9D5B"/><Setter Property="Foreground" Value="White"/></Style>
+    <Style Selector="Button.success:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#27B96B"/></Style>
+    <Style Selector="Button.danger"><Setter Property="Background" Value="#D64550"/><Setter Property="Foreground" Value="White"/></Style>
+    <Style Selector="Button.danger:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#E85A65"/></Style>
 
-    <!-- Kırmızı Buton (Durdur, Sil) -->
-    <Style Selector="Button.danger">
-        <Setter Property="Background" Value="#dc3545"/>
-        <Setter Property="Foreground" Value="White"/>
+    <!-- Kenar çubuğu butonları -->
+    <Style Selector="Button.side">
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="Width" Value="40"/>
+        <Setter Property="Height" Value="40"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="FontSize" Value="17"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="CornerRadius" Value="10"/>
     </Style>
-    <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="#bb2d3b"/>
-    </Style>
+    <Style Selector="Button.side:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="#303642"/></Style>
+    <Style Selector="Button.side.active"><Setter Property="Background" Value="#2F6FED"/><Setter Property="Foreground" Value="White"/></Style>
+    <Style Selector="Button.side.active /template/ ContentPresenter"><Setter Property="Background" Value="#2F6FED"/></Style>
 
-    <!-- Koyu Gri Buton (Yukarı/Aşağı Taşı) -->
-    <Style Selector="Button.neutral">
-        <Setter Property="Background" Value="#333333"/>
-        <Setter Property="Foreground" Value="White"/>
-    </Style>
-    <Style Selector="Button.neutral:pointerover /template/ ContentPresenter">
-        <Setter Property="Background" Value="#444444"/>
-    </Style>
+    <!-- Araç kutusu butonu -->
+    <Style Selector="Button.tool"><Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Padding" Value="10,8"/></Style>
+    <Style Selector="Button.tool.active /template/ ContentPresenter"><Setter Property="Background" Value="#2F6FED"/><Setter Property="Foreground" Value="White"/></Style>
 
-    <!-- ListBox Stilleri (Koordinatlar ve Komutlar için) -->
     <Style Selector="ListBox">
-        <Setter Property="Background" Value="#1a1a1a"/>
-        <Setter Property="BorderBrush" Value="#333333"/>
+        <Setter Property="Background" Value="#14171C"/>
+        <Setter Property="BorderBrush" Value="#2A2E37"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="4"/>
-        <Setter Property="Padding" Value="5"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="2"/>
     </Style>
-    <Style Selector="ListBoxItem">
-        <Setter Property="Padding" Value="5,2"/>
-    </Style>
+    <Style Selector="ListBoxItem"><Setter Property="Padding" Value="8,4"/><Setter Property="FontSize" Value="12"/></Style>
 
-    <!-- Log Ekranı -->
-    <Style Selector="TextBox.log">
-        <Setter Property="Background" Value="#1a1a1a"/>
-        <Setter Property="Foreground" Value="#00ff00"/>
-        <Setter Property="FontFamily" Value="Consolas, Courier New, monospace"/>
-        <Setter Property="FontSize" Value="12"/>
-        <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="IsReadOnly" Value="True"/>
-    </Style>
-
-    <Style Selector="TextBlock.header">
+    <Style Selector="TextBlock.title">
         <Setter Property="FontWeight" Value="Bold"/>
-        <Setter Property="FontSize" Value="13"/>
-        <Setter Property="Margin" Value="0,0,0,8"/>
+        <Setter Property="FontSize" Value="14"/>
         <Setter Property="Foreground" Value="White"/>
     </Style>
+    <Style Selector="TextBlock.section">
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Foreground" Value="#8A93A6"/>
+        <Setter Property="Margin" Value="0,6,0,0"/>
+    </Style>
+    <Style Selector="TextBlock.hint"><Setter Property="FontSize" Value="11"/><Setter Property="Foreground" Value="#8A93A6"/><Setter Property="TextWrapping" Value="Wrap"/></Style>
+    <Style Selector="CheckBox"><Setter Property="FontSize" Value="12"/></Style>
+
+    <!-- Ekrandaki tuş/joystick görselleri -->
+    <Style Selector="Border.key">
+        <Setter Property="Background" Value="#B31B1E24"/>
+        <Setter Property="BorderBrush" Value="#5EEAD4"/>
+        <Setter Property="BorderThickness" Value="2"/>
+    </Style>
+    <Style Selector="Border.key.pressed"><Setter Property="Background" Value="#CC22C55E"/><Setter Property="BorderBrush" Value="White"/></Style>
+    <Style Selector="Border.key.selected"><Setter Property="BorderBrush" Value="#FFD34D"/></Style>
+    <Style Selector="Border.dirkey">
+        <Setter Property="Background" Value="#991B1E24"/>
+        <Setter Property="BorderBrush" Value="#5EEAD4"/>
+        <Setter Property="BorderThickness" Value="1.5"/>
+    </Style>
+    <Style Selector="Border.dirkey.pressed"><Setter Property="Background" Value="#CC22C55E"/><Setter Property="BorderBrush" Value="White"/></Style>
+    <Style Selector="Ellipse.ring"><Setter Property="Stroke" Value="#5EEAD4"/></Style>
+    <Style Selector="Ellipse.ring.selected"><Setter Property="Stroke" Value="#FFD34D"/></Style>
+    <Style Selector="Viewbox.game"><Setter Property="Opacity" Value="0.5"/></Style>
+    <Style Selector="Ellipse.conn"><Setter Property="Fill" Value="#D64550"/></Style>
+    <Style Selector="Ellipse.conn.on"><Setter Property="Fill" Value="#22C55E"/></Style>
 </Styles>

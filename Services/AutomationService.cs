@@ -1,65 +1,88 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using WaydroidController.Managers;
 using WaydroidController.Models;
 
 namespace WaydroidController.Services;
 
 public partial class AutomationService : ObservableObject
 {
-    private readonly MacroEngine _engine = new MacroEngine();
-    private CancellationTokenSource? _runCts;
-    private CountdownService? _countdown;
+    private readonly MacroEngine _engine = new();
+    private CancellationTokenSource? _cts;
+    private bool _userStopped;
 
     [ObservableProperty] private bool _isRunning;
+    [ObservableProperty] private string _remainingText = "";
 
-    public event Action<int>? OnCountdownTick;
-    public event Action<string>? OnLog;
-
-    public async Task StartAsync(WorkspaceManager workspace, ResolutionDto resolution, bool useCountdown, int totalSeconds, bool stopCountdownOnStop)
+    /// <param name="timeLimitSeconds">0 = süresiz; aksi halde süre dolunca makro durdurulur.</param>
+    public async Task StartAsync(
+        IReadOnlyList<MacroCommand> commands,
+        IReadOnlyDictionary<string, Coordinate> coordinates,
+        int timeLimitSeconds)
     {
-        if (CommandsEmpty(workspace)) { OnLog?.Invoke("Hata: Çalıştırılacak komut yok!"); return; }
-
-        if (useCountdown)
+        if (IsRunning) return;
+        if (commands.Count == 0)
         {
-            if (totalSeconds <= 0) { OnLog?.Invoke("Hata: Geri sayım süresi 0'dan büyük olmalıdır!"); return; }
-
-            _countdown?.Stop();
-            _countdown = new CountdownService(
-                (remaining) => OnCountdownTick?.Invoke(remaining),
-                () => Stop());
-            _countdown.Start(totalSeconds);
+            LogService.Warning("Çalıştırılacak komut yok.");
+            return;
         }
 
+        using var cts = new CancellationTokenSource();
+        _cts = cts;
+        _userStopped = false;
         IsRunning = true;
-        _runCts = new CancellationTokenSource();
+
+        Task? ticker = null;
+        if (timeLimitSeconds > 0)
+        {
+            cts.CancelAfter(TimeSpan.FromSeconds(timeLimitSeconds));
+            ticker = TickAsync(timeLimitSeconds, cts.Token);
+        }
 
         try
         {
-            var coordsDict = workspace.Coordinates.ToDictionary(c => c.Name, c => c);
-            await _engine.RunAsync(workspace.Commands, coordsDict, resolution, _runCts.Token);
+            await _engine.RunAsync(commands, coordinates, cts.Token);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            LogService.Info(_userStopped ? "Makro durduruldu." : "Süre doldu, makro durduruldu.");
+        }
         catch (Exception ex)
         {
-            OnLog?.Invoke($"Makro Hatası: {ex.Message}");
+            LogService.Error($"Makro hatası: {ex.Message}");
         }
         finally
         {
+            cts.Cancel();
+            if (ticker is not null) await ticker;
+            _cts = null;
+            RemainingText = "";
             IsRunning = false;
-            _runCts?.Dispose();
-            _runCts = null;
-            if (stopCountdownOnStop && _countdown?.IsRunning == true) _countdown.Stop();
         }
     }
 
     public void Stop()
     {
-        if (IsRunning)
-        {
-            _runCts?.Cancel();
-            OnLog?.Invoke("Otomasyon durduruldu.");
-        }
+        if (!IsRunning) return;
+        _userStopped = true;
+        _cts?.Cancel();
     }
 
-    private bool CommandsEmpty(WorkspaceManager workspace) => workspace.Commands.Count == 0;
+    private async Task TickAsync(int total, CancellationToken ct)
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var left = Math.Max(0, total - (int)Math.Ceiling(sw.Elapsed.TotalSeconds));
+                RemainingText = $"{left / 3600:00}:{left % 3600 / 60:00}:{left % 60:00}";
+                await Task.Delay(250, ct);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
 }

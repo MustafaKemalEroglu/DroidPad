@@ -1,181 +1,272 @@
 using System;
-using System.Threading.Tasks;
+using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using KeyBinding = WaydroidController.Models.KeyBinding;
 using WaydroidController.Models;
+using WaydroidController.Services;
 using WaydroidController.ViewModels;
 
 namespace WaydroidController.Views;
 
 public partial class OverlayWindow : Window
 {
-    private bool _isDraggingItem;
-    private object? _draggedItem;          // KeyBinding veya JoystickGroup
-    private Point _dragStartPointer;
-    private int _dragStartX, _dragStartY;
-    private bool _isDragging;
-    private Point _dragStartPoint;
-    private DateTime _lastMoveTime = DateTime.MinValue;
+    private static readonly FilePickerFileType JsonType = new("Profil (*.json)") { Patterns = new[] { "*.json" } };
+
+    // Oyun modu dokunma durumu
+    private bool _touching;
+    private Point _touchStart;
+    private long _lastMoveTicks;
+
+    // Öğe sürükleme durumu
+    private object? _dragItem;
+    private Point _dragOrigin;
+    private double _dragStartX, _dragStartY;
 
     public OverlayWindow()
     {
         InitializeComponent();
-        this.PointerPressed += OnMainPointerPressed;
-        this.PointerMoved += OnMainPointerMoved;
-        this.PointerReleased += OnMainPointerReleased;
+        Focusable = true;
 
-        // YENİ: Klavye olayları
-        this.KeyDown += OnWindowKeyDown;
-        this.KeyUp += OnWindowKeyUp;
-        this.Focusable = true;
+        Surface.PointerPressed += OnSurfacePressed;
+        Surface.PointerMoved += OnSurfaceMoved;
+        Surface.PointerReleased += OnSurfaceReleased;
+        Surface.PointerCaptureLost += (_, _) => CancelTouch();
+
+        ItemsLayer.AddHandler(PointerPressedEvent, OnItemPressed, RoutingStrategies.Bubble);
+        ItemsLayer.AddHandler(PointerMovedEvent, OnItemMoved, RoutingStrategies.Bubble);
+        ItemsLayer.AddHandler(PointerReleasedEvent, OnItemReleased, RoutingStrategies.Bubble);
+
+        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Bubble);
+        AddHandler(KeyUpEvent, OnWindowKeyUp, RoutingStrategies.Bubble);
+        Deactivated += (_, _) => Vm?.ReleaseAllKeys();
+        Closing += (_, _) => Vm?.Shutdown();
+
+        LogService.Entries.CollectionChanged += OnLogChanged;
     }
 
-    public void OnMainPointerPressed(object? sender, PointerPressedEventArgs e)
+    private MainWindowViewModel? Vm => DataContext as MainWindowViewModel;
+
+    // ---------- Koordinat dönüşümü: pencere → Android ekranı ----------
+
+    private Point ToDevice(Point p)
     {
-        if (DataContext is not MainWindowViewModel vm) return;
+        var vm = Vm;
+        var w = Root.Bounds.Width;
+        var h = Root.Bounds.Height;
+        if (vm is null || w <= 0 || h <= 0) return p;
+        return new Point(
+            Math.Clamp(p.X * vm.DeviceWidth / w, 0, vm.DeviceWidth - 1),
+            Math.Clamp(p.Y * vm.DeviceHeight / h, 0, vm.DeviceHeight - 1));
+    }
 
-        var point = e.GetCurrentPoint(this);
+    // ---------- Oyun yüzeyi ----------
 
-        // --- SAĞ TIK: Düzenleme modunda menü aç ---
-        if (point.Properties.IsRightButtonPressed && vm.State.IsPanelOpen)
+    private void OnSurfacePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        var point = e.GetCurrentPoint(Root);
+        var state = vm.State;
+
+        if (point.Properties.IsRightButtonPressed)
         {
-            vm.State.ContextMenuX = point.Position.X;
-            vm.State.ContextMenuY = point.Position.Y;
-            vm.State.IsContextMenuOpen = true;
+            if (!state.IsEditMode) return;
+            var dev = ToDevice(point.Position);
+            state.ContextMenuX = Math.Clamp(point.Position.X, 0, Math.Max(0, Root.Bounds.Width - 200));
+            state.ContextMenuY = Math.Clamp(point.Position.Y, 0, Math.Max(0, Root.Bounds.Height - 150));
+            state.ContextDeviceX = dev.X;
+            state.ContextDeviceY = dev.Y;
+            state.IsContextMenuOpen = true;
             e.Handled = true;
             return;
         }
 
-        // --- SOL TIK ---
-        if (point.Properties.IsLeftButtonPressed)
+        if (!point.Properties.IsLeftButtonPressed) return;
+        Focus();
+
+        if (state.IsContextMenuOpen)
         {
-            // Menü açıksa sadece kapat
-            if (vm.State.IsContextMenuOpen)
-            {
-                vm.State.IsContextMenuOpen = false;
-                e.Handled = true;
-                return;
-            }
-
-            // Oyun modu (panel kapalı) – mevcut davranış
-            if (!vm.State.IsPanelOpen)
-            {
-                _dragStartPoint = e.GetPosition(this);
-                _isDragging = true;
-                _ = vm.StartTouchAsync(_dragStartPoint.X, _dragStartPoint.Y,
-                                       Bounds.Width, Bounds.Height, RenderScaling);
-                e.Pointer.Capture(this);
-                e.Handled = true;
-            }
-        }
-    }
-
-    public void OnMainPointerMoved(object? sender, PointerEventArgs e)
-    {
-        if (DataContext is not MainWindowViewModel vm) return;
-        if (!_isDragging || vm.State.IsPanelOpen) return;
-
-        // 33ms Throttle (Saniyede ~30 kare)
-        var now = DateTime.Now;
-        if ((now - _lastMoveTime).TotalMilliseconds < 33)
+            state.IsContextMenuOpen = false;
+            e.Handled = true;
             return;
-        _lastMoveTime = now;
+        }
 
-        var currentPoint = e.GetPosition(this);
-        vm.MoveTouch(currentPoint.X, currentPoint.Y, RenderScaling);
+        var d = ToDevice(point.Position);
+
+        if (state.IsEditMode)
+        {
+            if (state.PendingTool is { } tool) vm.PlaceTool(tool, d.X, d.Y);
+            else vm.Select(null);
+            e.Handled = true;
+            return;
+        }
+
+        if (state.IsPicking)
+        {
+            vm.CompletePick(d.X, d.Y);
+            e.Handled = true;
+            return;
+        }
+
+        _touching = true;
+        _touchStart = d;
+        vm.TouchDown(d.X, d.Y);
+        e.Pointer.Capture(Surface);
         e.Handled = true;
     }
 
-    public void OnMainPointerReleased(object? sender, PointerReleasedEventArgs e)
+    private void OnSurfaceMoved(object? sender, PointerEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel vm) return;
-        if (!_isDragging) return;
+        if (!_touching || Vm is not { } vm) return;
 
-        _isDragging = false;
-        var endPoint = e.GetPosition(this);
+        // ~60 Hz ile sınırla; kuyruk zaten ardışık MOVE'ları birleştiriyor
+        var now = Environment.TickCount64;
+        if (now - _lastMoveTicks < 16) return;
+        _lastMoveTicks = now;
 
-        vm.EndTouch(endPoint.X, endPoint.Y, RenderScaling);
+        var d = ToDevice(e.GetPosition(Root));
+        vm.TouchMove(d.X, d.Y);
+    }
 
+    private void OnSurfaceReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_touching || Vm is not { } vm) return;
+        _touching = false;
+        var d = ToDevice(e.GetPosition(Root));
+        vm.TouchUp(d.X, d.Y, _touchStart.X, _touchStart.Y);
         e.Pointer.Capture(null);
         e.Handled = true;
     }
 
-    public void OnStartWaitingForKeyClick(object? sender, RoutedEventArgs e)
+    private void CancelTouch()
     {
-        if (DataContext is MainWindowViewModel vm) vm.StartWaitingForKey();
+        if (!_touching) return;
+        _touching = false;
+        Vm?.TouchUp(_touchStart.X, _touchStart.Y, _touchStart.X, _touchStart.Y);
     }
 
-    // Öğe (Tap / Joystick) sürükleme başlangıcı
-    private void OnItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    // ---------- Tuş / joystick sürükleme (düzenleme modu) ----------
+
+    private static object? FindItem(object? source)
     {
-        if (DataContext is not MainWindowViewModel vm) return;
-        if (!vm.State.IsPanelOpen) return;               // Sadece düzenleme modunda
-        if (sender is not Control control || control.DataContext is null) return;
+        for (var v = source as Visual; v is not null; v = v.GetVisualParent())
+            if (v is StyledElement { DataContext: KeyBinding or JoystickGroup } el)
+                return el.DataContext;
+        return null;
+    }
 
-        _isDraggingItem = true;
-        _draggedItem = control.DataContext;
-        _dragStartPointer = e.GetPosition(this);
+    private void OnItemPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (Vm is not { } vm || !vm.State.IsEditMode) return;
+        if (!e.GetCurrentPoint(Root).Properties.IsLeftButtonPressed) return;
 
-        if (_draggedItem is Models.KeyBinding kb) { _dragStartX = kb.X; _dragStartY = kb.Y; }
-        else if (_draggedItem is JoystickGroup jg) { _dragStartX = jg.X; _dragStartY = jg.Y; }
+        var item = FindItem(e.Source);
+        if (item is null) return;
 
-        e.Pointer.Capture(control);
         vm.State.IsContextMenuOpen = false;
+        vm.State.PendingTool = null;
+        vm.Select(item);
+
+        _dragItem = item;
+        _dragOrigin = ToDevice(e.GetPosition(Root));
+        (_dragStartX, _dragStartY) = item switch
+        {
+            KeyBinding k => (k.X, k.Y),
+            JoystickGroup j => (j.X, j.Y),
+            _ => (0.0, 0.0)
+        };
+        e.Pointer.Capture(ItemsLayer);
         e.Handled = true;
     }
 
-    // Öğe sürükleme
-    private void OnItemPointerMoved(object? sender, PointerEventArgs e)
+    private void OnItemMoved(object? sender, PointerEventArgs e)
     {
-        if (!_isDraggingItem || _draggedItem is null) return;
-        if (!Equals(e.Pointer.Captured, sender)) return;
+        if (_dragItem is null || Vm is not { } vm) return;
 
-        var current = e.GetPosition(this);
-        double dx = current.X - _dragStartPointer.X;
-        double dy = current.Y - _dragStartPointer.Y;
+        var cur = ToDevice(e.GetPosition(Root));
+        var x = Math.Clamp(_dragStartX + cur.X - _dragOrigin.X, 0, vm.DeviceWidth);
+        var y = Math.Clamp(_dragStartY + cur.Y - _dragOrigin.Y, 0, vm.DeviceHeight);
 
-        if (_draggedItem is Models.KeyBinding kb)
+        switch (_dragItem)
         {
-            kb.X = _dragStartX + (int)Math.Round(dx);
-            kb.Y = _dragStartY + (int)Math.Round(dy);
-        }
-        else if (_draggedItem is Models.JoystickGroup jg)
-        {
-            jg.X = _dragStartX + (int)Math.Round(dx);
-            jg.Y = _dragStartY + (int)Math.Round(dy);
+            case KeyBinding k: k.X = x; k.Y = y; break;
+            case JoystickGroup j: j.X = x; j.Y = y; break;
         }
         e.Handled = true;
     }
 
-    // Öğe sürükleme bitişi
-    private void OnItemPointerReleased(object? sender, PointerReleasedEventArgs e)
+    private void OnItemReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (!_isDraggingItem) return;
-        _isDraggingItem = false;
-        _draggedItem = null;
+        if (_dragItem is null) return;
+        _dragItem = null;
         e.Pointer.Capture(null);
         e.Handled = true;
     }
+
+    // ---------- Klavye ----------
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel vm) return;
-        if (vm.State.IsPanelOpen) return; // Panel açıkken tuşları oyuna gönderme
+        if (Vm is not { } vm || e.Key == Key.None) return;
 
-        // F1-F12 gibi fonksiyon tuşlarını hariç tut (F12 panel aç/kapat için kullanılıyor)
-        if (e.KeyModifiers == KeyModifiers.None && !e.Key.ToString().StartsWith("F"))
+        var typing = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox or NumericUpDown or ComboBox;
+        if (typing && e.Key == Key.Escape)
         {
-            vm.ProcessKeyDown(e.Key.ToString());
+            Focus();
             e.Handled = true;
+            return;
         }
+
+        if (vm.HandleKeyDown(KeyNames.Name(e.Key), typing)) e.Handled = true;
     }
 
     private void OnWindowKeyUp(object? sender, KeyEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel vm) return;
-        vm.ProcessKeyUp(e.Key.ToString());
-        e.Handled = true;
+        if (Vm is not { } vm || e.Key == Key.None) return;
+        vm.HandleKeyUp(KeyNames.Name(e.Key));
+    }
+
+    // ---------- Panel butonları ----------
+
+    private async void OnSaveProfileClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Profili Kaydet",
+            DefaultExtension = "json",
+            SuggestedFileName = "profil.json",
+            FileTypeChoices = new[] { JsonType }
+        });
+        if (file?.TryGetLocalPath() is { } path) await vm.SaveProfileAsync(path);
+    }
+
+    private async void OnLoadProfileClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Profil Yükle",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { JsonType }
+        });
+        if (files.Count == 1 && files[0].TryGetLocalPath() is { } path) await vm.LoadProfileAsync(path);
+    }
+
+    private void OnClearLogClick(object? sender, RoutedEventArgs e) => LogService.Clear();
+    private void OnExitClick(object? sender, RoutedEventArgs e) => Close();
+
+    private void OnLogChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action != NotifyCollectionChangedAction.Add || Vm?.State.IsLogPanel != true) return;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (LogList.ItemCount > 0) LogList.ScrollIntoView(LogList.ItemCount - 1);
+        }, DispatcherPriority.Background);
     }
 }
