@@ -24,6 +24,7 @@ public static partial class AdbService
 
     private static readonly SemaphoreSlim ConnectGate = new(1, 1);
     private static Session? _session;
+    private static Session? _touch; // cihazdaki çok dokunuşlu yardımcı (yoksa null → "input" komutlarına düşülür)
     private static string _device = "";
     private static ResolutionDto? _resolution;
     private static DateTime _nextAttempt = DateTime.MinValue;
@@ -31,6 +32,9 @@ public static partial class AdbService
     public static event Action<bool>? ConnectionChanged;
 
     public static bool IsConnected => _session?.IsAlive == true;
+
+    /// <summary>Cihaz yardımcısı çalışıyorsa gerçek çok dokunuş (aynı anda joystick + tuş) kullanılabilir.</summary>
+    public static bool HasMultiTouch => _touch?.IsAlive == true;
 
     // ---------------- Bağlantı ----------------
 
@@ -86,7 +90,7 @@ public static partial class AdbService
 
             _device = device;
             _resolution = null;
-            var session = new Session(proc);
+            var session = new Session(proc, helper: false);
             sessionRef = session;
             _session = session;
             proc.Exited += (_, _) =>
@@ -101,6 +105,7 @@ public static partial class AdbService
             };
 
             LogService.Success($"ADB bağlandı → {device}");
+            await StartHelperAsync(device);
             ConnectionChanged?.Invoke(true);
             return true;
         }
@@ -115,6 +120,82 @@ public static partial class AdbService
         }
     }
 
+    // ---------------- Cihaz yardımcısı (çok dokunuş) ----------------
+
+    private const string HelperClass = "DroidPadInput";
+
+    /// <summary>Gömülü .dex'i cihaza (içeriğine göre adlandırılmış olarak) yükler ve kalıcı süreç olarak başlatır. Başarısızsa sessizce "input" yoluna düşülür.</summary>
+    private static async Task StartHelperAsync(string device)
+    {
+        try
+        {
+            using var res = typeof(AdbService).Assembly.GetManifestResourceStream("droidpad-input.dex");
+            if (res is null) return;
+            using var ms = new MemoryStream();
+            await res.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..10].ToLowerInvariant();
+            var remote = $"/data/local/tmp/droidpad-input-{hash}.dex";
+
+            var (exists, _) = await RunAsync("adb", new[] { "-s", device, "shell", "ls", remote }, 5000);
+            if (exists != 0)
+            {
+                var local = Path.Combine(Path.GetTempPath(), $"droidpad-input-{hash}.dex");
+                await File.WriteAllBytesAsync(local, bytes);
+                var (push, pushOut) = await RunAsync("adb", new[] { "-s", device, "push", local, remote }, 15000);
+                try { File.Delete(local); } catch { }
+                if (push != 0)
+                {
+                    LogService.Warning($"Girdi yardımcısı yüklenemedi (standart girdi kullanılacak): {pushOut.Trim()}");
+                    return;
+                }
+            }
+
+            var psi = new ProcessStartInfo("adb")
+            {
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            foreach (var a in new[] { "-s", device, "shell", $"CLASSPATH={remote} app_process / {HelperClass}" }) psi.ArgumentList.Add(a);
+
+            var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
+            var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            proc.OutputDataReceived += (_, a) => { if (a.Data == AckMarker) ready.TrySetResult(); };
+            proc.ErrorDataReceived += (_, a) => { if (!string.IsNullOrWhiteSpace(a.Data)) LogService.Debug($"yardımcı: {a.Data}"); };
+            proc.Start();
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+
+            var session = new Session(proc, helper: true);
+            session.Enqueue("s"); // hazır olduğunda "@@" döner
+            if (await Task.WhenAny(ready.Task, Task.Delay(5000)) != ready.Task)
+            {
+                session.Close();
+                LogService.Warning("Girdi yardımcısı başlatılamadı; standart girdi (tek dokunuş) kullanılacak.");
+                return;
+            }
+
+            _touch = session;
+            proc.Exited += (_, _) =>
+            {
+                if (ReferenceEquals(_touch, session))
+                {
+                    _touch = null;
+                    LogService.Warning("Girdi yardımcısı sonlandı; standart girdiye dönüldü.");
+                }
+                session.Close();
+            };
+            LogService.Success("Çok dokunuşlu girdi yardımcısı etkin.");
+        }
+        catch (Exception ex)
+        {
+            LogService.Warning($"Girdi yardımcısı kullanılamıyor: {ex.Message}");
+        }
+    }
+
     private static bool Fail()
     {
         _nextAttempt = DateTime.UtcNow.AddSeconds(3);
@@ -124,7 +205,11 @@ public static partial class AdbService
     public static void Disconnect()
     {
         var s = _session;
+        var t = _touch;
         _session = null;
+        _touch = null;
+        t?.Enqueue("r"); // açık dokunuşlar bırakılsın
+        t?.Close();
         if (s is null) return;
         s.Close();
         ConnectionChanged?.Invoke(false);
@@ -306,14 +391,30 @@ public static partial class AdbService
         }
     }
 
-    /// <summary>background=true: komut cihazda arka planda koşar, sıradaki komutu beklemez.</summary>
-    public static void Tap(int x, int y, bool background = true) => Send($"input tap {x} {y}{(background ? " &" : "")}");
+    // Yardımcı varsa her eylem kendi işaretçi numarasıyla gider; böylece birbirini kesmez.
+    public const int PtrMouse = 0, PtrStick = 1, PtrKey = 2, PtrKeySwipe = 3, PtrMacro = 4;
 
-    public static void Swipe(int x1, int y1, int x2, int y2, int durationMs = 300, bool background = true) =>
-        Send($"input swipe {x1} {y1} {x2} {y2} {durationMs}{(background ? " &" : "")}");
+    private static void SendTouch(string helperCmd)
+    {
+        var t = _touch;
+        if (t is { IsAlive: true }) t.Enqueue(helperCmd);
+    }
+
+    /// <summary>background=true: (yalnızca "input" yolunda) komut cihazda arka planda koşar, sıradaki komutu beklemez.</summary>
+    public static void Tap(int x, int y, bool background = true, int pointer = PtrMacro)
+    {
+        if (HasMultiTouch) SendTouch($"t {pointer} {x} {y}");
+        else Send($"input tap {x} {y}{(background ? " &" : "")}");
+    }
+
+    public static void Swipe(int x1, int y1, int x2, int y2, int durationMs = 300, bool background = true, int pointer = PtrMacro)
+    {
+        if (HasMultiTouch) SendTouch($"p {pointer} {x1} {y1} {x2} {y2} {durationMs}");
+        else Send($"input swipe {x1} {y1} {x2} {y2} {durationMs}{(background ? " &" : "")}");
+    }
 
     /// <summary>Aynı noktada uzun süre kalan "swipe" uzun basma sayılır.</summary>
-    public static void LongPress(int x, int y, int durationMs) => Swipe(x, y, x, y, durationMs);
+    public static void LongPress(int x, int y, int durationMs, int pointer = PtrMacro) => Swipe(x, y, x, y, durationMs, true, pointer);
 
     /// <summary>"input text" yalnızca ASCII destekler; boşluk %s olur ("%" için kaçış yoktur), kabuk özel karakterleri tırnaklanır.</summary>
     public static void Text(string text)
@@ -336,9 +437,23 @@ public static partial class AdbService
         Send($"input keyevent {keycode}{(background ? " &" : "")}");
     }
 
-    public static void TouchDown(int x, int y) => Send($"input motionevent DOWN {x} {y}");
-    public static void TouchMove(int x, int y) => Send($"{MoveCommand} {x} {y}");
-    public static void TouchUp(int x, int y) => Send($"input motionevent UP {x} {y}");
+    public static void TouchDown(int x, int y, int pointer = PtrMouse)
+    {
+        if (HasMultiTouch) SendTouch($"d {pointer} {x} {y}");
+        else Send($"input motionevent DOWN {x} {y}");
+    }
+
+    public static void TouchMove(int x, int y, int pointer = PtrMouse)
+    {
+        if (HasMultiTouch) SendTouch($"m {pointer} {x} {y}");
+        else Send($"{MoveCommand} {x} {y}");
+    }
+
+    public static void TouchUp(int x, int y, int pointer = PtrMouse)
+    {
+        if (HasMultiTouch) SendTouch($"u {pointer}");
+        else Send($"input motionevent UP {x} {y}");
+    }
 
     // ---------------- Oturum ----------------
 
@@ -349,7 +464,21 @@ public static partial class AdbService
         private readonly object _lock = new();
         private bool _closing;
         private int _pendingMoves;
+        private readonly bool _helper;
         private readonly Thread _thread;
+
+        /// <summary>Art arda gelen MOVE'ları birleştirmek için anahtar; MOVE değilse null. Yardımcıda işaretçi başına ayrı.</summary>
+        private string? MoveKey(string cmd)
+        {
+            if (_helper)
+                return cmd.Length > 2 && cmd[0] == 'm' && cmd[1] == ' '
+                    ? cmd[..Math.Max(2, cmd.IndexOf(' ', 2))] : null;
+            return cmd.StartsWith(MoveCommand, StringComparison.Ordinal) ? MoveCommand : null;
+        }
+
+        private bool IsContact(string cmd) => _helper
+            ? cmd.StartsWith("d ", StringComparison.Ordinal) || cmd.StartsWith("u ", StringComparison.Ordinal) || cmd == "r"
+            : cmd.StartsWith("input motionevent DOWN", StringComparison.Ordinal) || cmd.StartsWith("input motionevent UP", StringComparison.Ordinal);
 
         /// <summary>Kabuk bir MOVE'u işleyince çağrılır; bir sonraki (en güncel) MOVE gönderilebilir.</summary>
         public void Ack()
@@ -361,9 +490,10 @@ public static partial class AdbService
             }
         }
 
-        public Session(Process proc)
+        public Session(Process proc, bool helper)
         {
             _proc = proc;
+            _helper = helper;
             _thread = new Thread(Loop) { IsBackground = true, Name = "adb-writer" };
             _thread.Start();
         }
@@ -382,8 +512,8 @@ public static partial class AdbService
             lock (_lock)
             {
                 if (_closing) return;
-                if (command.StartsWith(MoveCommand, StringComparison.Ordinal) &&
-                    _queue.Last?.Value.StartsWith(MoveCommand, StringComparison.Ordinal) == true)
+                var key = MoveKey(command);
+                if (key is not null && _queue.Last is { } last && MoveKey(last.Value) == key)
                 {
                     _queue.Last.Value = command; // eski konumu ez
                 }
@@ -401,8 +531,7 @@ public static partial class AdbService
         {
             for (var n = _queue.First; n is not null; n = n.Next)
             {
-                if (n.Value.StartsWith("input motionevent DOWN", StringComparison.Ordinal) ||
-                    n.Value.StartsWith("input motionevent UP", StringComparison.Ordinal)) continue;
+                if (IsContact(n.Value)) continue;
                 _queue.Remove(n);
                 return;
             }
@@ -427,7 +556,7 @@ public static partial class AdbService
                                 continue;
                             }
                             // Kabuk önceki MOVE'u bitirmeden yenisini yazma: bekleyenler birleşsin, gecikme birikmesin
-                            if (_queue.First!.Value.StartsWith(MoveCommand, StringComparison.Ordinal) && _pendingMoves >= 1 && !_closing)
+                            if (!_helper && _queue.First!.Value.StartsWith(MoveCommand, StringComparison.Ordinal) && _pendingMoves >= 1 && !_closing)
                             {
                                 if (!Monitor.Wait(_lock, 250)) _pendingMoves = 0; // onay kaybolduysa takılma
                                 continue;
@@ -436,7 +565,7 @@ public static partial class AdbService
                         }
                         cmd = _queue.First!.Value;
                         _queue.RemoveFirst();
-                        if (cmd.StartsWith(MoveCommand, StringComparison.Ordinal))
+                        if (!_helper && cmd.StartsWith(MoveCommand, StringComparison.Ordinal))
                         {
                             _pendingMoves++;
                             cmd += $"; echo {AckMarker}";

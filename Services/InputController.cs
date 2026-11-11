@@ -8,8 +8,9 @@ namespace DroidPad.Services;
 
 /// <summary>
 /// Klavye/fare olaylarını Android dokunmasına çevirir.
-/// Not: "input motionevent" tek işaretçi (tek parmak) destekler; bu yüzden aynı anda
-/// yalnızca bir joystick tutulabilir ve tuş dokunuşları joystick'i kısa süre keser/geri yükler.
+/// Cihaz yardımcısı (AdbService.HasMultiTouch) varsa her eylem kendi işaretçisiyle gider: joystick ve tuşlar
+/// aynı anda çalışır. Yoksa "input motionevent" tek işaretçi destekler; bu durumda aynı anda yalnızca
+/// bir joystick tutulabilir ve tuş dokunuşları joystick'i kısa süre keser/geri yükler.
 /// </summary>
 public sealed class InputController
 {
@@ -32,7 +33,10 @@ public sealed class InputController
             switch (t.Kind)
             {
                 case BindingKind.Swipe:
-                    WithStickRestore(() => AdbService.Swipe((int)t.X, (int)t.Y, (int)t.EndX, (int)t.EndY, 250, background: false));
+                    if (AdbService.HasMultiTouch)
+                        AdbService.Swipe((int)t.X, (int)t.Y, (int)t.EndX, (int)t.EndY, 250, pointer: AdbService.PtrKeySwipe);
+                    else
+                        WithStickRestore(() => AdbService.Swipe((int)t.X, (int)t.Y, (int)t.EndX, (int)t.EndY, 250, background: false));
                     break;
                 case BindingKind.Turbo:
                     StartTurbo(t);
@@ -71,12 +75,13 @@ public sealed class InputController
         foreach (var j in sticks) j.ReleaseAll();
         if (_stick is not null)
         {
-            AdbService.TouchUp(_stickX, _stickY);
+            AdbService.TouchUp(_stickX, _stickY, AdbService.PtrStick);
             _stick = null;
         }
         if (_mouseDown)
         {
             _mouseDown = false;
+            if (AdbService.HasMultiTouch) AdbService.TouchUp(0, 0, AdbService.PtrMouse); // "input" yolunda sahte UP gönderme
         }
     }
 
@@ -91,19 +96,19 @@ public sealed class InputController
             if (_stick is null)
             {
                 _stick = j;
-                AdbService.TouchDown(cx, cy);
+                AdbService.TouchDown(cx, cy, AdbService.PtrStick);
             }
             else if (!ReferenceEquals(_stick, j))
             {
                 return; // tek dokunuş: başka joystick zaten tutuluyor
             }
 
-            AdbService.TouchMove(tx, ty);
+            AdbService.TouchMove(tx, ty, AdbService.PtrStick);
             _stickX = tx; _stickY = ty;
         }
         else if (ReferenceEquals(_stick, j))
         {
-            AdbService.TouchUp(_stickX, _stickY);
+            AdbService.TouchUp(_stickX, _stickY, AdbService.PtrStick);
             _stick = null;
 
             foreach (var other in all)               // beklemede başka joystick varsa devral
@@ -113,7 +118,7 @@ public sealed class InputController
 
     private void TapWithStickRestore(int x, int y)
     {
-        if (_stick is null) AdbService.Tap(x, y);
+        if (_stick is null || AdbService.HasMultiTouch) AdbService.Tap(x, y, pointer: AdbService.PtrKey);
         else WithStickRestore(() => AdbService.Tap(x, y, background: false));
     }
 
@@ -154,7 +159,7 @@ public sealed class InputController
 
     // ---------- Fare (oyun modu) ----------
 
-    public void MouseDown(int x, int y) { _mouseDown = true; AdbService.TouchDown(x, y); }
-    public void MouseMove(int x, int y) { if (_mouseDown) AdbService.TouchMove(x, y); }
-    public void MouseUp(int x, int y) { if (!_mouseDown) return; _mouseDown = false; AdbService.TouchUp(x, y); }
+    public void MouseDown(int x, int y) { _mouseDown = true; AdbService.TouchDown(x, y, AdbService.PtrMouse); }
+    public void MouseMove(int x, int y) { if (_mouseDown) AdbService.TouchMove(x, y, AdbService.PtrMouse); }
+    public void MouseUp(int x, int y) { if (!_mouseDown) return; _mouseDown = false; AdbService.TouchUp(x, y, AdbService.PtrMouse); }
 }

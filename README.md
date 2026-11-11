@@ -53,7 +53,10 @@ Ayarlar `~/.config/DroidPad/` altında tutulur. *Bu uygulama için profil olarak
 açıkken o uygulama öne geldiğinde profil otomatik yüklenir.
 
 ## Bilinen sınırlar
-- **Tek dokunuş:** `input motionevent` tek işaretçi destekler; aynı anda yalnızca bir joystick
-  tutulabilir ve tuş dokunuşları joystick'i kısa süre keser/geri yükler.
+- **Çok dokunuş:** Bağlanınca küçük bir cihaz yardımcısı (`Helper/`, scrcpy gibi `app_process`)
+  Waydroid'e yüklenir; fare, joystick ve tuşlar ayrı parmaklarla aynı anda çalışır ve her olay için
+  yeni süreç başlatılmaz. Yardımcı başlatılamazsa `input motionevent` yoluna düşülür: bu durumda tek
+  işaretçi vardır, aynı anda yalnızca bir joystick tutulabilir ve tuş dokunuşları joystick'i kısa
+  süre keser/geri yükler. Yardımcıyı yeniden derlemek için: `scripts/build-helper.sh` (JDK + internet).
 - **Tam ekran:** katman tüm ekranı Android ekranına eşler; Waydroid pencere modunda hizalanmaz.
 - **Fare ile bakış:** Wayland'de imleç kilitleme ve çoklu dokunuş olmadan uygulanamıyor.
