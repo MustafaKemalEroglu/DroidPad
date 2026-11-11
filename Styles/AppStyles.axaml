@@ -91,7 +91,6 @@
     <Style Selector="Border.dirkey.pressed"><Setter Property="Background" Value="#CC22C55E"/><Setter Property="BorderBrush" Value="White"/></Style>
     <Style Selector="Ellipse.ring"><Setter Property="Stroke" Value="#5EEAD4"/></Style>
     <Style Selector="Ellipse.ring.selected"><Setter Property="Stroke" Value="#FFD34D"/></Style>
-    <Style Selector="Viewbox.game"><Setter Property="Opacity" Value="0.5"/></Style>
     <Style Selector="Ellipse.conn"><Setter Property="Fill" Value="#D64550"/></Style>
     <Style Selector="Ellipse.conn.on"><Setter Property="Fill" Value="#22C55E"/></Style>
 </Styles>

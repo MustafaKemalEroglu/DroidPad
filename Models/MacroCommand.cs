@@ -8,6 +8,8 @@ namespace DroidPad.Models;
 [JsonDerivedType(typeof(WaitCommand), "wait")]
 [JsonDerivedType(typeof(RandomWaitCommand), "random_wait")]
 [JsonDerivedType(typeof(KeyCommand), "key")]
+[JsonDerivedType(typeof(LongPressCommand), "long_press")]
+[JsonDerivedType(typeof(TextCommand), "text")]
 [JsonDerivedType(typeof(LoopStartCommand), "loop_start")]
 [JsonDerivedType(typeof(LoopEndCommand), "loop_end")]
 public abstract class MacroCommand
@@ -19,6 +21,19 @@ public sealed class ClickCommand : MacroCommand
 {
     public string Target { get; set; } = "";
     [JsonIgnore] public override string Description => $"CLICK → {Target}";
+}
+
+public sealed class LongPressCommand : MacroCommand
+{
+    public string Target { get; set; } = "";
+    public double Seconds { get; set; } = 1;
+    [JsonIgnore] public override string Description => $"LONG PRESS → {Target} ({Seconds:0.##} sn)";
+}
+
+public sealed class TextCommand : MacroCommand
+{
+    public string Text { get; set; } = "";
+    [JsonIgnore] public override string Description => $"TEXT → {Text}";
 }
 
 public sealed class SwipeCommand : MacroCommand

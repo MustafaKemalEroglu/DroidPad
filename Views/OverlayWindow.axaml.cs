@@ -36,6 +36,7 @@ public partial class OverlayWindow : Window
         Surface.PointerPressed += OnSurfacePressed;
         Surface.PointerMoved += OnSurfaceMoved;
         Surface.PointerReleased += OnSurfaceReleased;
+        Surface.PointerWheelChanged += OnSurfaceWheel;
         Surface.PointerCaptureLost += (_, _) => CancelTouch();
 
         ItemsLayer.AddHandler(PointerPressedEvent, OnItemPressed, RoutingStrategies.Bubble);
@@ -84,6 +85,12 @@ public partial class OverlayWindow : Window
         var point = e.GetCurrentPoint(Root);
         var state = vm.State;
 
+        if (point.Properties.IsRightButtonPressed && !state.IsEditMode && !state.IsPicking && vm.RightClickBack)
+        {
+            vm.NavBack();
+            e.Handled = true;
+            return;
+        }
         if (!point.Properties.IsLeftButtonPressed) return;
         Focus();
 
@@ -98,7 +105,8 @@ public partial class OverlayWindow : Window
 
         if (state.IsEditMode)
         {
-            if (state.PendingTool is { } tool) vm.PlaceTool(tool, d.X, d.Y);
+            if (state.IsPickingEnd) vm.CompleteEndPick(d.X, d.Y);
+            else if (state.PendingTool is { } tool) vm.PlaceTool(tool, d.X, d.Y);
             else vm.Select(null);
             e.Handled = true;
             return;
@@ -135,8 +143,16 @@ public partial class OverlayWindow : Window
         state.ContextDeviceX = dev.X;
         state.ContextDeviceY = dev.Y;
         state.ContextMenuX = Math.Clamp(point.Position.X, 0, Math.Max(0, Root.Bounds.Width - 240));
-        state.ContextMenuY = Math.Clamp(point.Position.Y, 0, Math.Max(0, Root.Bounds.Height - 560));
+        state.ContextMenuY = Math.Clamp(point.Position.Y, 0, Math.Max(0, Root.Bounds.Height - 700));
         state.IsContextMenuOpen = true;
+        e.Handled = true;
+    }
+
+    private void OnSurfaceWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if (Vm is not { WheelScroll: true } vm || vm.State.IsEditMode || vm.State.IsPicking) return;
+        var d = ToDevice(e.GetPosition(Root));
+        vm.Scroll(d.X, d.Y, e.Delta.Y);
         e.Handled = true;
     }
 
@@ -284,6 +300,18 @@ public partial class OverlayWindow : Window
             FileTypeFilter = new[] { JsonType }
         });
         if (files.Count == 1 && files[0].TryGetLocalPath() is { } path) await vm.LoadProfileAsync(path);
+    }
+
+    private async void OnInstallApkClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "APK Seç",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { new FilePickerFileType("Android paketi (*.apk)") { Patterns = new[] { "*.apk" } } }
+        });
+        if (files.Count == 1 && files[0].TryGetLocalPath() is { } path) await vm.InstallApkAsync(path);
     }
 
     private void OnClearLogClick(object? sender, RoutedEventArgs e) => LogService.Clear();

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Avalonia.Threading;
 using DroidPad.Models;
 
 namespace DroidPad.Services;
@@ -15,6 +17,7 @@ public sealed class InputController
     private JoystickGroup? _stick;
     private int _stickX, _stickY;
     private bool _mouseDown;
+    private readonly Dictionary<KeyBinding, DispatcherTimer> _turbo = new();
 
     // ---------- Klavye ----------
 
@@ -26,7 +29,18 @@ public sealed class InputController
         {
             if (!KeyNames.Same(t.KeyName, key)) continue;
             t.IsPressed = true;
-            TapWithStickRestore((int)Math.Round(t.X), (int)Math.Round(t.Y));
+            switch (t.Kind)
+            {
+                case BindingKind.Swipe:
+                    WithStickRestore(() => AdbService.Swipe((int)t.X, (int)t.Y, (int)t.EndX, (int)t.EndY, 250, background: false));
+                    break;
+                case BindingKind.Turbo:
+                    StartTurbo(t);
+                    break;
+                default:
+                    TapWithStickRestore((int)Math.Round(t.X), (int)Math.Round(t.Y));
+                    break;
+            }
         }
 
         foreach (var j in sticks)
@@ -38,7 +52,11 @@ public sealed class InputController
         if (!_held.Remove(key)) return;
 
         foreach (var t in taps)
-            if (KeyNames.Same(t.KeyName, key)) t.IsPressed = false;
+        {
+            if (!KeyNames.Same(t.KeyName, key)) continue;
+            t.IsPressed = false;
+            StopTurbo(t);
+        }
 
         foreach (var j in sticks)
             if (j.SetKey(key, false)) UpdateStick(j, sticks);
@@ -49,6 +67,7 @@ public sealed class InputController
     {
         _held.Clear();
         foreach (var t in taps) t.IsPressed = false;
+        foreach (var t in _turbo.Keys.ToList()) StopTurbo(t);
         foreach (var j in sticks) j.ReleaseAll();
         if (_stick is not null)
         {
@@ -94,18 +113,43 @@ public sealed class InputController
 
     private void TapWithStickRestore(int x, int y)
     {
+        if (_stick is null) AdbService.Tap(x, y);
+        else WithStickRestore(() => AdbService.Tap(x, y, background: false));
+    }
+
+    /// <summary>Joystick basılıyken: bırak → eylem (sıralı, arka plansız) → geri yükle.</summary>
+    private void WithStickRestore(Action action)
+    {
         if (_stick is null)
         {
-            AdbService.Tap(x, y);
+            action();
             return;
         }
 
-        // Joystick basılıyken: bırak → dokun → geri yükle (sıralı, arka plansız)
         var s = _stick;
         AdbService.TouchUp(_stickX, _stickY);
-        AdbService.Tap(x, y, background: false);
+        action();
         AdbService.TouchDown((int)Math.Round(s.X), (int)Math.Round(s.Y));
         AdbService.TouchMove(_stickX, _stickY);
+    }
+
+    // ---------- Turbo: tuş basılıyken hızlı tekrar ----------
+
+    private void StartTurbo(KeyBinding t)
+    {
+        StopTurbo(t);
+        void Fire() => TapWithStickRestore((int)Math.Round(t.X), (int)Math.Round(t.Y));
+        Fire();
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Math.Clamp(t.IntervalMs, 30, 1000)) };
+        timer.Tick += (_, _) => Fire();
+        _turbo[t] = timer;
+        timer.Start();
+    }
+
+    private void StopTurbo(KeyBinding t)
+    {
+        if (!_turbo.Remove(t, out var timer)) return;
+        timer.Stop();
     }
 
     // ---------- Fare (oyun modu) ----------

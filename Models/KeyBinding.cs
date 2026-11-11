@@ -4,6 +4,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace DroidPad.Models;
 
+public static class BindingKind
+{
+    public const string Tap = "tap", Turbo = "turbo", Swipe = "swipe";
+}
+
 public partial class KeyBinding : ObservableObject
 {
     public const double Size = 46;
@@ -12,8 +17,27 @@ public partial class KeyBinding : ObservableObject
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Left))] private double _x;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Top))] private double _y;
 
+    /// <summary>tap = tek dokunuş, turbo = basılı tutunca hızlı tekrar, swipe = (X,Y) → (EndX,EndY) kaydırma.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSwipe), nameof(Badge))] private string _kind = BindingKind.Tap;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(EndLeft))] private double _endX;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(EndTop))] private double _endY;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Badge))] private int _intervalMs = 80;
+
     [ObservableProperty] [property: JsonIgnore] private bool _isPressed;
     [ObservableProperty] [property: JsonIgnore] private bool _isSelected;
+
+    [JsonIgnore] public bool IsSwipe => Kind == BindingKind.Swipe;
+    [JsonIgnore] public bool IsTurbo => Kind == BindingKind.Turbo;
+    [JsonIgnore] public string Badge => Kind switch { BindingKind.Turbo => $"⟳{IntervalMs}", BindingKind.Swipe => "➜", _ => "" };
+    [JsonIgnore] public double EndLeft => EndX - 8;
+    [JsonIgnore] public double EndTop => EndY - 8;
+    [JsonIgnore] public Avalonia.Point StartPoint => new(X, Y);
+    [JsonIgnore] public Avalonia.Point EndPoint => new(EndX, EndY);
+
+    partial void OnXChanged(double value) => OnPropertyChanged(nameof(StartPoint));
+    partial void OnYChanged(double value) => OnPropertyChanged(nameof(StartPoint));
+    partial void OnEndXChanged(double value) => OnPropertyChanged(nameof(EndPoint));
+    partial void OnEndYChanged(double value) => OnPropertyChanged(nameof(EndPoint));
 
     [JsonIgnore] public string KeyLabel => KeyNames.Display(KeyName);
     [JsonIgnore] public double Left => X - Size / 2;

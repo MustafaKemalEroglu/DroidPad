@@ -21,7 +21,7 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<KeyBinding> KeyBindings { get; } = new();
     public ObservableCollection<JoystickGroup> JoystickGroups { get; } = new();
     public ObservableCollection<LogEntry> Log => LogService.Entries;
-    public string[] CmdTypes { get; } = { "click", "swipe", "wait", "random_wait", "key", "loop_start", "loop_end" };
+    public string[] CmdTypes { get; } = { "click", "swipe", "wait", "random_wait", "key", "long_press", "text", "loop_start", "loop_end" };
 
     public EditorState State { get; } = new();
 
@@ -42,6 +42,12 @@ public partial class MainWindowViewModel : ObservableObject
     // Seçili tuş öğesi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsTapSelected), nameof(HasSelection))] private KeyBinding? _selectedTap;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsJoystickSelected), nameof(HasSelection))] private JoystickGroup? _selectedJoystick;
+
+    // Oyun modu ayarları (profille birlikte saklanır)
+    [ObservableProperty] private bool _rightClickBack = true;
+    [ObservableProperty] private bool _wheelScroll = true;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(EffectiveOpacity))] private double _keyOpacity = 0.5;
+    public double EffectiveOpacity => State.IsEditMode ? 1 : KeyOpacity;
 
     // Geri sayım (süre sınırı)
     [ObservableProperty] private bool _enableCountdown;
@@ -72,6 +78,10 @@ public partial class MainWindowViewModel : ObservableObject
     public MainWindowViewModel()
     {
         _automation.PropertyChanged += OnAutomationChanged;
+        State.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(EditorState.ActivePanel)) OnPropertyChanged(nameof(EffectiveOpacity));
+        };
         AdbService.ConnectionChanged += connected =>
             Avalonia.Threading.Dispatcher.UIThread.Post(() => IsAdbConnected = connected);
 
@@ -197,7 +207,7 @@ public partial class MainWindowViewModel : ObservableObject
     private void Rescale(double sx, double sy)
     {
         if (Math.Abs(sx - 1) < 1e-6 && Math.Abs(sy - 1) < 1e-6) return;
-        foreach (var k in KeyBindings) { k.X *= sx; k.Y *= sy; }
+        foreach (var k in KeyBindings) { k.X *= sx; k.Y *= sy; k.EndX *= sx; k.EndY *= sy; }
         foreach (var j in JoystickGroups) { j.X *= sx; j.Y *= sy; j.Radius *= (sx + sy) / 2; }
         for (var i = 0; i < Coordinates.Count; i++)
         {
@@ -237,6 +247,7 @@ public partial class MainWindowViewModel : ObservableObject
             case "F11": ShowPanel(PanelKind.Macro); return true;
             case "F10": ShowPanel(PanelKind.Log); return true;
             case "F9": ToggleRun(); return true;
+            case "F8": State.ShowKeys = !State.ShowKeys; return true;
         }
         if (typing) return false;
 
@@ -245,6 +256,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (key == "Escape")
         {
             if (State.IsContextMenuOpen) State.IsContextMenuOpen = false;
+            else if (State.IsPickingEnd) State.IsPickingEnd = false;
             else if (State.PendingTool is not null) State.PendingTool = null;
             else if (State.IsPicking) State.IsPicking = false;
             else if (State.IsRecording) StopRecording();
@@ -267,13 +279,54 @@ public partial class MainWindowViewModel : ObservableObject
 
     // ================= Fare (oyun modu) — koordinatlar cihaz uzayında =================
 
-    public void TouchDown(double x, double y) => _input.MouseDown((int)x, (int)y);
+    private TimeSpan _downAt;
+
+    public void TouchDown(double x, double y)
+    {
+        _downAt = _recClock.Elapsed;
+        _input.MouseDown((int)x, (int)y);
+    }
+
+    /// <summary>Android "Geri" (oyun modunda sağ tık).</summary>
+    public void NavBack() => AdbService.KeyEvent("KEYCODE_BACK");
+
+    private long _lastScrollTicks;
+
+    /// <summary>Fare tekerleği: imlecin olduğu yerde kısa bir kaydırma yapar.</summary>
+    public void Scroll(double x, double y, double wheelDelta)
+    {
+        var now = Environment.TickCount64;
+        if (wheelDelta == 0 || now - _lastScrollTicks < 90) return;
+        _lastScrollTicks = now;
+        var dy = (int)(DeviceHeight * 0.18) * Math.Sign(wheelDelta); // tekerlek yukarı → içerik yukarı kayar
+        var y2 = (int)Math.Clamp(y - dy, 0, DeviceHeight - 1);
+        AdbService.Swipe((int)x, (int)y, (int)x, y2, 160);
+    }
+
+    // ================= Araç çubuğu =================
+
+    [RelayCommand] private void NavKey(string keycode) => AdbService.KeyEvent(keycode);
+
+    [RelayCommand]
+    private async Task ScreenshotAsync()
+    {
+        var dir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "DroidPad");
+        var path = await AdbService.ScreenshotAsync(dir);
+        if (path is null) LogService.Error("Ekran görüntüsü alınamadı.");
+        else LogService.Success($"Ekran görüntüsü kaydedildi: {path}");
+    }
+
+    public async Task InstallApkAsync(string path)
+    {
+        LogService.Info($"APK kuruluyor: {System.IO.Path.GetFileName(path)} …");
+        if (await AdbService.InstallApkAsync(path)) LogService.Success("APK kuruldu.");
+    }
     public void TouchMove(double x, double y) => _input.MouseMove((int)x, (int)y);
 
     public void TouchUp(double x, double y, double startX, double startY)
     {
         _input.MouseUp((int)x, (int)y);
-        if (State.IsRecording) RecordGesture((int)startX, (int)startY, (int)x, (int)y);
+        if (State.IsRecording) RecordGesture((int)startX, (int)startY, (int)x, (int)y, (_recClock.Elapsed - _downAt).TotalSeconds);
     }
 
     public void CompletePick(double x, double y)
@@ -313,7 +366,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (tool == "tap")
         {
-            var tap = new KeyBinding { KeyName = "?", X = x, Y = y };
+            var tap = new KeyBinding { KeyName = "?", X = x, Y = y, EndX = x, EndY = y };
             KeyBindings.Add(tap);
             Select(tap);
             BeginRebindForSelected(); // MuMu gibi: yerleştirince hemen tuşa bas
@@ -329,6 +382,43 @@ public partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private void AddFromContextMenu(string tool) => PlaceTool(tool, State.ContextDeviceX, State.ContextDeviceY);
+
+    [RelayCommand]
+    private void SetKind(string kind)
+    {
+        if (SelectedTap is not { } t) return;
+        t.Kind = kind;
+        if (kind == BindingKind.Swipe && Math.Abs(t.EndX - t.X) + Math.Abs(t.EndY - t.Y) < 1)
+        {
+            t.EndX = t.X;
+            t.EndY = Math.Clamp(t.Y - DeviceHeight * 0.2, 0, DeviceHeight);
+        }
+        State.IsContextMenuOpen = false;
+        if (kind == BindingKind.Swipe) State.IsPickingEnd = true;
+    }
+
+    [RelayCommand]
+    private void BeginEndPick()
+    {
+        if (SelectedTap is null) return;
+        State.IsContextMenuOpen = false;
+        State.IsPickingEnd = true;
+    }
+
+    public void CompleteEndPick(double x, double y)
+    {
+        State.IsPickingEnd = false;
+        if (SelectedTap is not { } t) return;
+        t.EndX = x;
+        t.EndY = y;
+    }
+
+    [RelayCommand]
+    private void AdjustTurbo(string delta)
+    {
+        if (SelectedTap is { } t && int.TryParse(delta, out var d))
+            t.IntervalMs = Math.Clamp(t.IntervalMs + d, 30, 1000);
+    }
 
     [RelayCommand]
     private void ResizeJoystick(string delta)
@@ -378,12 +468,26 @@ public partial class MainWindowViewModel : ObservableObject
         var rest = _rebindQueue.ToArray();
         CancelRebind();
         if (key == "Escape" || slot is null) return;
+        WarnIfKeyInUse(slot, key);
         ApplySlot(slot, key);
         if (rest.Length > 0)
         {
             foreach (var r in rest[1..]) _rebindQueue.Enqueue(r);
             StartSlot(rest[0]);
         }
+    }
+
+    /// <summary>Aynı tuş başka bir öğede de kullanılıyorsa uyarır (ikisi de tetiklenir).</summary>
+    private void WarnIfKeyInUse(string slot, string key)
+    {
+        var self = SelectedTap;
+        var inTaps = KeyBindings.Any(k => !ReferenceEquals(k, self) && KeyNames.Same(k.KeyName, key));
+        var inSticks = JoystickGroups.Any(j => !ReferenceEquals(j, SelectedJoystick) &&
+            (KeyNames.Same(j.UpKey, key) || KeyNames.Same(j.DownKey, key) || KeyNames.Same(j.LeftKey, key) || KeyNames.Same(j.RightKey, key)));
+        var inSelf = SelectedJoystick is { } sj && slot != "up" && KeyNames.Same(sj.UpKey, key)
+                     || SelectedJoystick is { } s2 && (slot != "left" && KeyNames.Same(s2.LeftKey, key) || slot != "down" && KeyNames.Same(s2.DownKey, key) || slot != "right" && KeyNames.Same(s2.RightKey, key));
+        if (inTaps || inSticks || inSelf)
+            LogService.Warning($"'{KeyNames.Display(key)}' tuşu birden fazla öğeye atanmış; hepsi aynı anda tetiklenir.");
     }
 
     private void ApplySlot(string slot, string key)
@@ -484,6 +588,8 @@ public partial class MainWindowViewModel : ObservableObject
             "wait" => TryDouble(v, out var s) ? new WaitCommand { Seconds = s } : null,
             "random_wait" => ParseRandomWait(v),
             "key" when v.Length > 0 => new KeyCommand { Keycode = v },
+            "long_press" => ParseLongPress(v),
+            "text" when CmdValue.Length > 0 => new TextCommand { Text = CmdValue },
             "loop_start" => new LoopStartCommand { Count = int.TryParse(v, out var c) ? c : -1 },
             "loop_end" => new LoopEndCommand(),
             _ => null
@@ -516,15 +622,17 @@ public partial class MainWindowViewModel : ObservableObject
         LogService.Info("Kayıt durdu.");
     }
 
-    private void RecordGesture(int x1, int y1, int x2, int y2)
+    private void RecordGesture(int x1, int y1, int x2, int y2, double held)
     {
-        var started = _recClock.Elapsed.TotalSeconds;
+        var started = _recClock.Elapsed.TotalSeconds - held;
         var gap = started - _recLast;
         if (Commands.Count > 0 && gap >= 0.1)
             Commands.Add(new WaitCommand { Seconds = Math.Round(gap, 1) });
 
         var dist = Math.Sqrt(Math.Pow(x2 - x1, 2) + Math.Pow(y2 - y1, 2));
-        if (dist < 15)
+        if (dist < 15 && held >= 0.6)
+            Commands.Add(new LongPressCommand { Target = PointName(x1, y1), Seconds = Math.Round(held, 1) });
+        else if (dist < 15)
             Commands.Add(new ClickCommand { Target = PointName(x1, y1) });
         else
             Commands.Add(new SwipeCommand { Start = PointName(x1, y1), End = PointName(x2, y2) });
@@ -582,7 +690,10 @@ public partial class MainWindowViewModel : ObservableObject
         Coordinates = Coordinates.ToDictionary(c => c.Name),
         Commands = Commands.ToList(),
         KeyBindings = KeyBindings.ToList(),
-        JoystickGroups = JoystickGroups.ToList()
+        JoystickGroups = JoystickGroups.ToList(),
+        RightClickBack = RightClickBack,
+        WheelScroll = WheelScroll,
+        KeyOpacity = KeyOpacity
     };
 
     public async Task SaveProfileAsync(string path, bool silent = false)
@@ -606,6 +717,9 @@ public partial class MainWindowViewModel : ObservableObject
         foreach (var k in profile.KeyBindings) KeyBindings.Add(k);
         JoystickGroups.Clear();
         foreach (var j in profile.JoystickGroups) JoystickGroups.Add(j);
+        RightClickBack = profile.RightClickBack;
+        WheelScroll = profile.WheelScroll;
+        KeyOpacity = Math.Clamp(profile.KeyOpacity, 0.1, 1);
 
         // Profil başka bir çözünürlükte kaydedilmişse mevcut ekrana ölçekle
         var pw = profile.Resolution?.Width > 0 ? profile.Resolution.Width : DeviceWidth;
@@ -636,6 +750,8 @@ public partial class MainWindowViewModel : ObservableObject
         "wait" => "1.0",
         "random_wait" => "1.0-3.0",
         "key" => "KEYCODE_BACK",
+        "long_press" => (Coordinates.FirstOrDefault()?.Name ?? "Nokta1") + ",1.0",
+        "text" => "merhaba",
         "loop_start" => "-1",
         _ => ""
     };
@@ -648,6 +764,15 @@ public partial class MainWindowViewModel : ObservableObject
     {
         var parts = value.Replace("->", ",").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         return parts.Length == 2 ? new SwipeCommand { Start = parts[0], End = parts[1] } : null;
+    }
+
+    private static LongPressCommand? ParseLongPress(string value)
+    {
+        var parts = value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return null;
+        var secs = 1.0;
+        if (parts.Length > 1 && !TryDouble(parts[1], out secs)) return null;
+        return new LongPressCommand { Target = parts[0], Seconds = secs };
     }
 
     private static RandomWaitCommand? ParseRandomWait(string value)

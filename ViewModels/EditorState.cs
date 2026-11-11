@@ -21,6 +21,7 @@ public partial class EditorState : ObservableObject
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWaitingForKey))] private string? _rebindHint;
     [ObservableProperty] private string? _pendingTool;
+    [ObservableProperty] private bool _isPickingEnd;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasBadge))] private bool _isPicking;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasBadge))] private bool _isRecording;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasBadge))] private bool _isRunning;

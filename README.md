@@ -26,11 +26,25 @@ Sağdaki yan çubuk ve kısayollar:
 | **F11** | Makro paneli |
 | **F10** | Günlük ve bağlantı durumu |
 | **F9**  | Makroyu başlat / durdur |
+| **F8**  | Oyun modunda tuşları göster / gizle |
 
 **Tuş eşleme:** bir araç seçip ekrana tıklayın veya boş alana sağ tıklayın; tuşu atamak için
 istenen tuşa basın. Öğeleri sürükleyerek taşıyın, `Del` ile silin.
 **Makro:** komutları elle ekleyin veya *Kaydet* ile ekrandaki tıklama/kaydırmaları kaydedin;
 döngü, rastgele bekleme ve süre sınırı desteklenir.
+
+**Tuş türleri** (sağ tık menüsü): *Tap* (tek dokunuş), *Turbo* (basılı tutunca hızlı tekrar,
+aralık ayarlanır), *Kaydır* (tuşa basınca başlangıç → bitiş noktası arası kaydırma).
+Aynı tuş birden fazla öğeye atanırsa günlükte uyarı çıkar.
+
+**Oyun modu:** sağ tık = Android *Geri*, fare tekerleği = kaydırma, tuş saydamlığı ayarlanabilir
+(hepsi profille birlikte saklanır).
+
+**Kenar çubuğu araçları:** Geri / Ana ekran / Son uygulamalar, ses ±, ekran görüntüsü
+(`~/Pictures/DroidPad`) ve APK kurulumu.
+
+**Makro komutları:** `click`, `swipe`, `long_press` (`Nokta,süre`), `text` (ASCII metin yazar),
+`key`, `wait`, `random_wait`, döngü. Kayıt sırasında 0,6 sn'den uzun basışlar `long_press` olarak kaydedilir.
 
 ## Profiller
 Ayarlar `~/.config/DroidPad/` altında tutulur. *Bu uygulama için profil olarak kaydet* ile

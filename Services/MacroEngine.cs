@@ -40,6 +40,19 @@ public sealed class MacroEngine
                     i++;
                     break;
 
+                case LongPressCommand lp:
+                    var q = coordinates[lp.Target];
+                    var ms = (int)(Math.Max(0.1, lp.Seconds) * 1000);
+                    AdbService.LongPress(q.X, q.Y, ms);
+                    await Task.Delay(ms, ct);
+                    i++;
+                    break;
+
+                case TextCommand t:
+                    AdbService.Text(t.Text);
+                    i++;
+                    break;
+
                 case SwipeCommand s:
                     AdbService.Swipe(coordinates[s.Start].X, coordinates[s.Start].Y,
                                      coordinates[s.End].X, coordinates[s.End].Y);
@@ -134,6 +147,7 @@ public sealed class MacroEngine
             switch (c)
             {
                 case ClickCommand cc when !coords.ContainsKey(cc.Target): missing.Add(cc.Target); break;
+                case LongPressCommand lc when !coords.ContainsKey(lc.Target): missing.Add(lc.Target); break;
                 case SwipeCommand sc:
                     if (!coords.ContainsKey(sc.Start)) missing.Add(sc.Start);
                     if (!coords.ContainsKey(sc.End)) missing.Add(sc.End);

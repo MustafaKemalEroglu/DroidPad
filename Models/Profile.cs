@@ -10,4 +10,11 @@ public sealed class Profile
     public List<MacroCommand> Commands { get; set; } = new();
     public List<KeyBinding> KeyBindings { get; set; } = new();
     public List<JoystickGroup> JoystickGroups { get; set; } = new();
+
+    /// <summary>Oyun modunda sağ tık = Android "Geri".</summary>
+    public bool RightClickBack { get; set; } = true;
+    /// <summary>Oyun modunda fare tekerleği = kaydırma.</summary>
+    public bool WheelScroll { get; set; } = true;
+    /// <summary>Oyun modunda tuş katmanının saydamlığı (0.1–1).</summary>
+    public double KeyOpacity { get; set; } = 0.5;
 }
