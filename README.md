@@ -27,6 +27,7 @@ Sağdaki yan çubuk ve kısayollar:
 | **F10** | Günlük ve bağlantı durumu |
 | **F9**  | Makroyu başlat / durdur |
 | **F8**  | Oyun modunda tuşları göster / gizle |
+| **F7**  | Yazma modunu elle aç/kapat. Android ekran klavyesi açılınca mod **otomatik** devreye girer: oyun tuşları askıya alınır, yazılanlar metin kutusuna gider (Enter/Esc ile çıkar) |
 
 **Tuş eşleme:** bir araç seçip ekrana tıklayın veya boş alana sağ tıklayın; tuşu atamak için
 istenen tuşa basın. Öğeleri sürükleyerek taşıyın, `Del` ile silin.

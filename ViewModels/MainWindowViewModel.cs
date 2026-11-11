@@ -107,6 +107,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (ProfileService.Exists(ProfileService.DefaultName))
             await LoadProfileAsync(ProfileService.DefaultPath, silent: true);
         RefreshProfileNames();
+        _ = WatchKeyboardAsync();
         await WatchForegroundAsync();
     }
 
@@ -239,7 +240,7 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>Klavye girdisi. true dönerse olay işlenmiş sayılır.</summary>
-    public bool HandleKeyDown(string key, bool typing)
+    public bool HandleKeyDown(string key, bool typing, string? symbol = null)
     {
         switch (key)
         {
@@ -248,8 +249,11 @@ public partial class MainWindowViewModel : ObservableObject
             case "F10": ShowPanel(PanelKind.Log); return true;
             case "F9": ToggleRun(); return true;
             case "F8": State.ShowKeys = !State.ShowKeys; return true;
+            case "F7": ToggleTyping(); return true;
         }
         if (typing) return false;
+
+        if (State.IsTyping) { HandleTypingKey(key, symbol); return true; }
 
         if (State.IsWaitingForKey) { CompleteRebind(key); return true; }
 
@@ -261,6 +265,7 @@ public partial class MainWindowViewModel : ObservableObject
             else if (State.IsPicking) State.IsPicking = false;
             else if (State.IsRecording) StopRecording();
             else if (State.IsAnyPanel) ShowPanel(State.ActivePanel);
+            else { _input.KeyDown(key, KeyBindings, JoystickGroups); return true; } // oyunda Esc bağlaması
             return true;
         }
 
@@ -272,6 +277,59 @@ public partial class MainWindowViewModel : ObservableObject
 
         _input.KeyDown(key, KeyBindings, JoystickGroups);
         return true;
+    }
+
+    /// <summary>Yazma modu: oyun tuşları askıya alınır, basılan tuşlar cihazdaki metin kutusuna gider.</summary>
+    private bool _manualTyping, _imeShown;
+
+    private void ToggleTyping() => SetManualTyping(!_manualTyping);
+
+    private void SetManualTyping(bool on)
+    {
+        _manualTyping = on;
+        RefreshTyping();
+    }
+
+    private void RefreshTyping()
+    {
+        var on = _manualTyping || _imeShown;
+        if (on == State.IsTyping) return;
+        if (on) ReleaseAllKeys(); // takılı kalan WASD vb. bırakılsın
+        State.IsTyping = on;
+    }
+
+    /// <summary>Android ekran klavyesi açıkken (metin kutusu odakta) oyun tuşlarını geçici olarak askıya alır.</summary>
+    private async Task WatchKeyboardAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
+        while (await timer.WaitForNextTickAsync())
+        {
+            if (!IsAdbConnected) { _imeShown = false; RefreshTyping(); continue; }
+            var shown = await AdbService.IsKeyboardShownAsync();
+            if (shown is null) continue;
+            _imeShown = shown.Value;
+            RefreshTyping();
+        }
+    }
+
+    private void HandleTypingKey(string key, string? symbol)
+    {
+        switch (key)
+        {
+            case "Escape":
+                if (_imeShown) AdbService.KeyEvent("KEYCODE_BACK"); // klavyeyi kapat
+                SetManualTyping(false);
+                return;
+            case "Return" or "Enter":
+                AdbService.KeyEvent("KEYCODE_ENTER");
+                SetManualTyping(false);
+                return;
+            case "Back": AdbService.KeyEvent("KEYCODE_DEL"); return;
+            case "Delete": AdbService.KeyEvent("KEYCODE_FORWARD_DEL"); return;
+            case "Left": AdbService.KeyEvent("KEYCODE_DPAD_LEFT"); return;
+            case "Right": AdbService.KeyEvent("KEYCODE_DPAD_RIGHT"); return;
+        }
+        if (!string.IsNullOrEmpty(symbol) && !char.IsControl(symbol[0])) AdbService.Text(symbol);
     }
 
     public void HandleKeyUp(string key) => _input.KeyUp(key, KeyBindings, JoystickGroups);
@@ -459,7 +517,7 @@ public partial class MainWindowViewModel : ObservableObject
     private void StartSlot(string slot)
     {
         _rebindSlot = slot;
-        State.RebindHint = $"{SlotName(slot)} için bir tuşa basın  (Esc: iptal)";
+        State.RebindHint = $"{SlotName(slot)} için bir tuşa basın  (Esc de atanabilir · iptal: ekrana tıklayın)";
     }
 
     private void CompleteRebind(string key)
@@ -467,7 +525,7 @@ public partial class MainWindowViewModel : ObservableObject
         var slot = _rebindSlot;
         var rest = _rebindQueue.ToArray();
         CancelRebind();
-        if (key == "Escape" || slot is null) return;
+        if (slot is null) return;
         WarnIfKeyInUse(slot, key);
         ApplySlot(slot, key);
         if (rest.Length > 0)
@@ -501,6 +559,14 @@ public partial class MainWindowViewModel : ObservableObject
             case "down" when SelectedJoystick is not null: SelectedJoystick.DownKey = key; break;
             case "right" when SelectedJoystick is not null: SelectedJoystick.RightKey = key; break;
         }
+    }
+
+    /// <summary>Tuş beklerken ekrana tıklanırsa atamayı iptal eder (Esc artık atanabilir bir tuş).</summary>
+    public bool CancelRebindIfWaiting()
+    {
+        if (!State.IsWaitingForKey) return false;
+        CancelRebind();
+        return true;
     }
 
     private void CancelRebind()

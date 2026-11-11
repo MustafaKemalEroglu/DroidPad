@@ -25,6 +25,7 @@ public partial class EditorState : ObservableObject
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasBadge))] private bool _isPicking;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasBadge))] private bool _isRecording;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasBadge))] private bool _isRunning;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasBadge))] private bool _isTyping;
 
     public bool IsEditMode => ActivePanel == PanelKind.Keys;
     public bool IsKeysPanel => ActivePanel == PanelKind.Keys;
@@ -34,5 +35,5 @@ public partial class EditorState : ObservableObject
     public bool IsSidePanel => ActivePanel is PanelKind.Macro or PanelKind.Log;
     public bool IsWaitingForKey => RebindHint is not null;
     public bool ItemsVisible => IsEditMode || ShowKeys;
-    public bool HasBadge => IsPicking || IsRecording || IsRunning;
+    public bool HasBadge => IsPicking || IsRecording || IsRunning || IsTyping;
 }

@@ -221,6 +221,15 @@ public static partial class AdbService
         return m.Success ? m.Groups[1].Value : null;
     }
 
+    /// <summary>Ekran klavyesi açık mı (metin girişi bekleniyor mu)? Okunamazsa null.</summary>
+    public static async Task<bool?> IsKeyboardShownAsync()
+    {
+        if (!IsConnected) return null;
+        var (exit, output) = await RunAsync("adb", $"-s {_device} shell \"dumpsys input_method | grep -E 'mInputShown|mImeWindowVis'\"", 2000);
+        if (exit != 0 || output.Length == 0) return exit == 0 ? false : null;
+        return output.Contains("mInputShown=true", StringComparison.Ordinal);
+    }
+
     [GeneratedRegex(@"mCurrentFocus=Window\{\S+ \S+ ([A-Za-z0-9_.]+)/")]
     private static partial Regex FocusRegex();
 

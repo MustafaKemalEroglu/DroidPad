@@ -124,6 +124,9 @@
             <Border Background="#E6D64550" IsVisible="{Binding State.IsRecording}" Padding="14,7" CornerRadius="8">
                 <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" Text="⏺ Makro kaydediliyor — ekranda tıklayın / kaydırın"/>
             </Border>
+            <Border Background="#E62B6CB0" IsVisible="{Binding State.IsTyping}" Padding="14,7" CornerRadius="8">
+                <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" Text="⌨ Yazma modu — oyun tuşları kapalı  (Enter: gönder, Esc: çık)"/>
+            </Border>
             <Border Background="#E61F9D5B" IsVisible="{Binding State.IsRunning}" Padding="14,7" CornerRadius="8">
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" Text="▶ Makro çalışıyor  (F9: durdur)"/>

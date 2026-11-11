@@ -94,6 +94,12 @@ public partial class OverlayWindow : Window
         if (!point.Properties.IsLeftButtonPressed) return;
         Focus();
 
+        if (vm.CancelRebindIfWaiting())
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (state.IsContextMenuOpen)
         {
             state.IsContextMenuOpen = false;
@@ -266,7 +272,7 @@ public partial class OverlayWindow : Window
             return;
         }
 
-        if (vm.HandleKeyDown(KeyNames.Name(e.Key), typing)) e.Handled = true;
+        if (vm.HandleKeyDown(KeyNames.Name(e.Key), typing, e.KeyModifiers.HasFlag(KeyModifiers.Control) ? null : e.KeySymbol)) e.Handled = true;
     }
 
     private void OnWindowKeyUp(object? sender, KeyEventArgs e)
