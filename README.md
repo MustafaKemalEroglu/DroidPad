@@ -41,7 +41,8 @@ Sağdaki yan çubuk ve kısayollar:
 **Tuş eşleme:** bir araç seçip ekrana tıklayın veya boş alana sağ tıklayın; tuşu atamak için
 istenen tuşa basın. Öğeleri sürükleyerek taşıyın, `Del` ile silin.
 **Makro:** komutları elle ekleyin veya *Kaydet* ile ekrandaki tıklama/kaydırmaları kaydedin;
-döngü, rastgele bekleme ve süre sınırı desteklenir.
+döngü, rastgele bekleme ve süre sınırı desteklenir. Birden fazla makro oluşturulabilir
+(ekle / adlandır / çoğalt / sil); F9 seçili makroyu çalıştırır. Eski tek makrolu profiller otomatik taşınır.
 
 **Tuş türleri** (sağ tık menüsü): *Tap* (tek dokunuş), *Turbo* (basılı tutunca hızlı tekrar,
 aralık ayarlanır), *Kaydır* (tuşa basınca başlangıç → bitiş noktası arası kaydırma).

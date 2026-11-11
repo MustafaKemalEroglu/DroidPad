@@ -7,7 +7,12 @@ public sealed class Profile
     /// <summary>Koordinatların kaydedildiği cihaz çözünürlüğü (yüklerken ölçeklemek için).</summary>
     public ResolutionDto Resolution { get; set; } = new();
     public Dictionary<string, Coordinate> Coordinates { get; set; } = new();
-    public List<MacroCommand> Commands { get; set; } = new();
+    public List<Macro> Macros { get; set; } = new();
+    /// <summary>Çalıştırılmak üzere seçili makronun adı.</summary>
+    public string? SelectedMacro { get; set; }
+    /// <summary>Yalnızca eski (tek makrolu) profilleri okumak için; yazılmaz.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public List<MacroCommand>? Commands { get; set; }
     public List<KeyBinding> KeyBindings { get; set; } = new();
     public List<JoystickGroup> JoystickGroups { get; set; } = new();
 

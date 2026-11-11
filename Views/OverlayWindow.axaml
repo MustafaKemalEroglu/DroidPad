@@ -211,7 +211,7 @@
                         <TextBlock Classes="title" Text="▶  Makro"/>
 
                         <Grid ColumnDefinitions="*,Auto">
-                            <Button Classes="success" Content="▶  Başlat  (F9)" Command="{Binding StartCommand}" IsVisible="{Binding !IsRunning}"/>
+                            <Button Classes="success" Content="▶  Seçili makroyu başlat  (F9)" Command="{Binding StartCommand}" IsVisible="{Binding !IsRunning}"/>
                             <Button Classes="danger" Content="■  Durdur  (F9)" Command="{Binding StopCommand}" IsVisible="{Binding IsRunning}"/>
                             <Button Grid.Column="1" Margin="6,0,0,0" Content="⏺ Kaydet" ToolTip.Tip="Ekrandaki tıklama ve kaydırmaları makroya kaydeder"
                                     Classes.danger="{Binding State.IsRecording}" Command="{Binding ToggleRecordingCommand}"/>
@@ -223,6 +223,25 @@
                             <NumericUpDown Width="86" Minimum="0" Maximum="59" FormatString="0" ShowButtonSpinner="False" Value="{Binding CdMinutes}" PlaceholderText="dk"/>
                             <NumericUpDown Width="86" Minimum="0" Maximum="59" FormatString="0" ShowButtonSpinner="False" Value="{Binding CdSeconds}" PlaceholderText="sn"/>
                         </StackPanel>
+
+                        <TextBlock Classes="section" Text="MAKROLAR"/>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                            <ComboBox ItemsSource="{Binding Macros}" SelectedItem="{Binding SelectedMacro}" HorizontalAlignment="Stretch"
+                                      IsEnabled="{Binding !IsRunning}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="m:Macro"><TextBlock Text="{Binding Name}"/></DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <Button Grid.Column="1" Classes="primary" Content="＋ Yeni" Command="{Binding AddMacroCommand}"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                            <TextBox Text="{Binding MacroNameEdit}" PlaceholderText="makro adı"/>
+                            <Button Grid.Column="1" Content="Adlandır" Command="{Binding RenameMacroCommand}"/>
+                        </Grid>
+                        <UniformGrid Columns="2">
+                            <Button Margin="2" Content="⧉ Çoğalt" Command="{Binding DuplicateMacroCommand}"/>
+                            <Button Margin="2" Classes="danger" Content="Makroyu sil" Command="{Binding RemoveMacroCommand}"/>
+                        </UniformGrid>
 
                         <TextBlock Classes="section" Text="KOMUTLAR"/>
                         <ListBox ItemsSource="{Binding Commands}" SelectedItem="{Binding SelectedCommand}" MinHeight="90" MaxHeight="190">

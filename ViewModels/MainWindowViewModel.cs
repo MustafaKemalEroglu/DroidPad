@@ -17,7 +17,10 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly InputController _input = new();
 
     public ObservableCollection<Coordinate> Coordinates { get; } = new();
-    public ObservableCollection<MacroCommand> Commands { get; } = new();
+    public ObservableCollection<Macro> Macros { get; } = new();
+    private static readonly ObservableCollection<MacroCommand> NoCommands = new();
+    /// <summary>Seçili makronun komutları.</summary>
+    public ObservableCollection<MacroCommand> Commands => SelectedMacro?.Commands ?? NoCommands;
     public ObservableCollection<KeyBinding> KeyBindings { get; } = new();
     public ObservableCollection<JoystickGroup> JoystickGroups { get; } = new();
     public ObservableCollection<LogEntry> Log => LogService.Entries;
@@ -38,6 +41,8 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string _cmdValue = "Nokta1";
     [ObservableProperty] private Coordinate? _selectedCoordinate;
     [ObservableProperty] private MacroCommand? _selectedCommand;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Commands), nameof(HasMacro))] private Macro? _selectedMacro;
+    public bool HasMacro => SelectedMacro is not null;
 
     // Seçili tuş öğesi
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsTapSelected), nameof(HasSelection))] private KeyBinding? _selectedTap;
@@ -78,6 +83,7 @@ public partial class MainWindowViewModel : ObservableObject
     public MainWindowViewModel()
     {
         _automation.PropertyChanged += OnAutomationChanged;
+        EnsureMacro();
         State.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(EditorState.ActivePanel)) OnPropertyChanged(nameof(EffectiveOpacity));
@@ -638,6 +644,70 @@ public partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand] private void RemoveCoordinate() { if (SelectedCoordinate is not null) Coordinates.Remove(SelectedCoordinate); }
 
+    // ================= Makro listesi =================
+
+    private void EnsureMacro()
+    {
+        if (Macros.Count == 0) Macros.Add(new Macro { Name = "Makro 1" });
+        SelectedMacro ??= Macros[0];
+    }
+
+    private string UniqueMacroName(string baseName, Macro? except = null)
+    {
+        var name = baseName;
+        for (var n = 2; Macros.Any(m => m != except && m.Name == name); n++) name = $"{baseName} {n}";
+        return name;
+    }
+
+    partial void OnSelectedMacroChanged(Macro? value)
+    {
+        StopRecording();
+        SelectedCommand = null;
+        MacroNameEdit = value?.Name ?? "";
+    }
+
+    [ObservableProperty] private string _macroNameEdit = "";
+
+    [RelayCommand]
+    private void AddMacro()
+    {
+        var m = new Macro { Name = UniqueMacroName($"Makro {Macros.Count + 1}") };
+        Macros.Add(m);
+        SelectedMacro = m;
+    }
+
+    [RelayCommand]
+    private void RenameMacro()
+    {
+        var name = MacroNameEdit.Trim();
+        if (SelectedMacro is null || name.Length == 0) return;
+        SelectedMacro.Name = UniqueMacroName(name, SelectedMacro);
+        MacroNameEdit = SelectedMacro.Name;
+    }
+
+    [RelayCommand]
+    private void DuplicateMacro()
+    {
+        if (SelectedMacro is null) return;
+        var copy = new Macro { Name = UniqueMacroName(SelectedMacro.Name + " kopya") };
+        foreach (var c in SelectedMacro.Commands) copy.Commands.Add(CloneCommand(c));
+        Macros.Add(copy);
+        SelectedMacro = copy;
+    }
+
+    private static MacroCommand CloneCommand(MacroCommand c) =>
+        System.Text.Json.JsonSerializer.Deserialize<MacroCommand>(System.Text.Json.JsonSerializer.Serialize(c))!;
+
+    [RelayCommand]
+    private void RemoveMacro()
+    {
+        if (SelectedMacro is null || IsRunning) return;
+        var idx = Macros.IndexOf(SelectedMacro);
+        Macros.RemoveAt(idx);
+        if (Macros.Count == 0) Macros.Add(new Macro { Name = "Makro 1" });
+        SelectedMacro = Macros[Math.Min(idx, Macros.Count - 1)];
+    }
+
     // ================= Makro komutları =================
 
     [RelayCommand] private void RemoveCommand() { if (SelectedCommand is not null) Commands.Remove(SelectedCommand); }
@@ -753,6 +823,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         var coords = Coordinates.ToDictionary(c => c.Name);
+        if (SelectedMacro is { } macro) LogService.Info($"Makro: {macro.Name}");
         await _automation.StartAsync(Commands.ToList(), coords, seconds);
     }
 
@@ -770,7 +841,8 @@ public partial class MainWindowViewModel : ObservableObject
     {
         Resolution = new ResolutionDto { Width = DeviceWidth, Height = DeviceHeight },
         Coordinates = Coordinates.ToDictionary(c => c.Name),
-        Commands = Commands.ToList(),
+        Macros = Macros.ToList(),
+        SelectedMacro = SelectedMacro?.Name,
         KeyBindings = KeyBindings.ToList(),
         JoystickGroups = JoystickGroups.ToList(),
         RightClickBack = RightClickBack,
@@ -793,8 +865,17 @@ public partial class MainWindowViewModel : ObservableObject
         Select(null);
         Coordinates.Clear();
         foreach (var (name, c) in profile.Coordinates) Coordinates.Add(new Coordinate { Name = name, X = c.X, Y = c.Y });
-        Commands.Clear();
-        foreach (var c in profile.Commands) Commands.Add(c);
+        Macros.Clear();
+        SelectedMacro = null;
+        foreach (var m in profile.Macros) Macros.Add(m);
+        if (profile.Commands is { Count: > 0 } legacy) // eski tek makrolu profil
+        {
+            var m = new Macro { Name = UniqueMacroName("Makro 1") };
+            foreach (var c in legacy) m.Commands.Add(c);
+            Macros.Insert(0, m);
+        }
+        SelectedMacro = Macros.FirstOrDefault(m => m.Name == profile.SelectedMacro);
+        EnsureMacro();
         KeyBindings.Clear();
         foreach (var k in profile.KeyBindings) KeyBindings.Add(k);
         JoystickGroups.Clear();
