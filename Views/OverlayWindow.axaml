@@ -202,7 +202,7 @@
         </Border>
 
         <!-- 5. Yan panel -->
-        <Border IsVisible="{Binding State.IsSidePanel}" HorizontalAlignment="Right" VerticalAlignment="Stretch"
+        <Border IsVisible="{Binding State.IsSidePanelShown}" HorizontalAlignment="Right" VerticalAlignment="Stretch"
                 Width="310" Margin="0,10,60,10" Background="#F2181A1F" BorderBrush="#2A2E37" BorderThickness="1" CornerRadius="12">
             <Grid>
                 <!-- MAKRO -->
@@ -293,7 +293,7 @@
         </Border>
 
         <!-- 6. Kenar çubuğu -->
-        <Border HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"
+        <Border IsVisible="{Binding State.IsNotPicking}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"
                 Background="#F2181A1F" BorderBrush="#2A2E37" BorderThickness="1" CornerRadius="14" Padding="6">
             <StackPanel Spacing="6">
                 <Button x:Name="KeysButton" Classes="side" Content="⌨" ToolTip.Tip="Tuş Eşleme (F12)"

@@ -8,7 +8,7 @@ public enum PanelKind { None, Keys, Macro, Log }
 public partial class EditorState : ObservableObject
 {
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEditMode), nameof(IsKeysPanel), nameof(IsMacroPanel), nameof(IsLogPanel), nameof(IsAnyPanel), nameof(IsSidePanel), nameof(ItemsVisible))]
+    [NotifyPropertyChangedFor(nameof(IsEditMode), nameof(IsKeysPanel), nameof(IsMacroPanel), nameof(IsLogPanel), nameof(IsAnyPanel), nameof(IsSidePanel), nameof(IsSidePanelShown), nameof(ItemsVisible))]
     private PanelKind _activePanel;
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsVisible))] private bool _showKeys = true;
@@ -22,7 +22,7 @@ public partial class EditorState : ObservableObject
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsWaitingForKey))] private string? _rebindHint;
     [ObservableProperty] private string? _pendingTool;
     [ObservableProperty] private bool _isPickingEnd;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasBadge))] private bool _isPicking;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasBadge), nameof(IsSidePanelShown), nameof(IsNotPicking))] private bool _isPicking;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasBadge))] private bool _isRecording;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasBadge))] private bool _isRunning;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasBadge))] private bool _isTyping;
@@ -32,6 +32,8 @@ public partial class EditorState : ObservableObject
     public bool IsMacroPanel => ActivePanel == PanelKind.Macro;
     public bool IsLogPanel => ActivePanel == PanelKind.Log;
     public bool IsAnyPanel => ActivePanel != PanelKind.None;
+    public bool IsNotPicking => !IsPicking;
+    public bool IsSidePanelShown => IsSidePanel && !IsPicking;
     public bool IsSidePanel => ActivePanel is PanelKind.Macro or PanelKind.Log;
     public bool IsWaitingForKey => RebindHint is not null;
     public bool ItemsVisible => IsEditMode || ShowKeys;
