@@ -5,9 +5,9 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using WaydroidController.Models;
+using DroidPad.Models;
 
-namespace WaydroidController.Services;
+namespace DroidPad.Services;
 
 /// <summary>
 /// Waydroid'e kalıcı tek bir "adb shell" oturumu üzerinden komut gönderir.
@@ -206,6 +206,18 @@ public static partial class AdbService
         _resolution = new ResolutionDto { Width = int.Parse(last.Groups[1].Value), Height = int.Parse(last.Groups[2].Value) };
         return _resolution;
     }
+
+    /// <summary>Ön plandaki uygulamanın paket adı (ör. com.foo.game); bilinmiyorsa null.</summary>
+    public static async Task<string?> GetForegroundPackageAsync()
+    {
+        if (!IsConnected) return null;
+        var (_, output) = await RunAsync("adb", $"-s {_device} shell dumpsys window | grep mCurrentFocus", 4000);
+        var m = FocusRegex().Match(output);
+        return m.Success ? m.Groups[1].Value : null;
+    }
+
+    [GeneratedRegex(@"mCurrentFocus=Window\{\S+ \S+ ([A-Za-z0-9_.]+)/")]
+    private static partial Regex FocusRegex();
 
     // ---------------- Komutlar ----------------
 

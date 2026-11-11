@@ -1,4 +1,4 @@
-namespace WaydroidController.Models;
+namespace DroidPad.Models;
 
 public sealed class ResolutionDto
 {

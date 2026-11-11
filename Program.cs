@@ -1,7 +1,7 @@
 ﻿using Avalonia;
 using System;
 
-namespace WaydroidController;
+namespace DroidPad;
 
 internal static class Program
 {

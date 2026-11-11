@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using WaydroidController.Models;
+using DroidPad.Models;
 
-namespace WaydroidController.Services;
+namespace DroidPad.Services;
 
 public sealed class MacroEngine
 {

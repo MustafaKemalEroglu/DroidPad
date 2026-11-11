@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using WaydroidController.Models;
+using DroidPad.Models;
 
-namespace WaydroidController.Services;
+namespace DroidPad.Services;
 
 /// <summary>
 /// Klavye/fare olaylarını Android dokunmasına çevirir.

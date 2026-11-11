@@ -1,11 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using WaydroidController.Models;
+using DroidPad.Models;
 
-namespace WaydroidController.Services;
+namespace DroidPad.Services;
 
 public static class ProfileService
 {
@@ -17,9 +19,49 @@ public static class ProfileService
     };
 
     public static string ConfigDir => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "WaydroidController");
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "DroidPad");
 
-    public static string DefaultPath => Path.Combine(ConfigDir, "default.json");
+    public const string DefaultName = "default";
+
+    public static string ProfilesDir => Path.Combine(ConfigDir, "profiles");
+
+    /// <summary>"default" → default.json; diğer adlar (genelde paket adı) profiles/ altında saklanır.</summary>
+    public static string PathFor(string name) => name == DefaultName
+        ? Path.Combine(ConfigDir, "default.json")
+        : Path.Combine(ProfilesDir, SafeFileName(name) + ".json");
+
+    public static string DefaultPath => PathFor(DefaultName);
+
+    public static bool Exists(string name) => File.Exists(PathFor(name));
+
+    public static IReadOnlyList<string> List()
+    {
+        var names = new List<string>();
+        if (File.Exists(DefaultPath)) names.Add(DefaultName);
+        if (Directory.Exists(ProfilesDir))
+            names.AddRange(Directory.EnumerateFiles(ProfilesDir, "*.json")
+                .Select(f => Path.GetFileNameWithoutExtension(f)).Order());
+        return names;
+    }
+
+    public static void Delete(string name)
+    {
+        try { File.Delete(PathFor(name)); } catch { }
+    }
+
+    private static string SafeFileName(string name) =>
+        string.Concat(name.Select(c => char.IsLetterOrDigit(c) || c is '.' or '_' or '-' ? c : '_'));
+
+    /// <summary>Eski sürümün (WaydroidController) yapılandırmasını bir kez yeni klasöre taşır.</summary>
+    public static void MigrateLegacy()
+    {
+        try
+        {
+            var old = Path.Combine(Path.GetDirectoryName(ConfigDir)!, "WaydroidController");
+            if (Directory.Exists(old) && !Directory.Exists(ConfigDir)) Directory.Move(old, ConfigDir);
+        }
+        catch { /* taşıma başarısızsa sıfırdan başlanır */ }
+    }
 
     public static async Task<(bool Success, string Message)> SaveAsync(string path, Profile profile)
     {

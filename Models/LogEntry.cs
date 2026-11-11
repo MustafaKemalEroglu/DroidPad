@@ -1,6 +1,6 @@
 using System;
 
-namespace WaydroidController.Models;
+namespace DroidPad.Models;
 
 public enum LogLevel { Info, Success, Warning, Error, Debug }
 

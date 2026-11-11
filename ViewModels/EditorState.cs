@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace WaydroidController.ViewModels;
+namespace DroidPad.ViewModels;
 
 public enum PanelKind { None, Keys, Macro, Log }
 

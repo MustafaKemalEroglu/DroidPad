@@ -7,12 +7,12 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using KeyBinding = WaydroidController.Models.KeyBinding;
-using WaydroidController.Models;
-using WaydroidController.Services;
-using WaydroidController.ViewModels;
+using KeyBinding = DroidPad.Models.KeyBinding;
+using DroidPad.Models;
+using DroidPad.Services;
+using DroidPad.ViewModels;
 
-namespace WaydroidController.Views;
+namespace DroidPad.Views;
 
 public partial class OverlayWindow : Window
 {

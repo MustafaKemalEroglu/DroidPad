@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace WaydroidController.Models;
+namespace DroidPad.Models;
 
 public sealed class Profile
 {

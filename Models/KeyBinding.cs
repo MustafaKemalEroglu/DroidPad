@@ -2,7 +2,7 @@ using System;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace WaydroidController.Models;
+namespace DroidPad.Models;
 
 public partial class KeyBinding : ObservableObject
 {

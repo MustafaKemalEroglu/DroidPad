@@ -6,10 +6,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using WaydroidController.Models;
-using WaydroidController.Services;
+using DroidPad.Models;
+using DroidPad.Services;
 
-namespace WaydroidController.ViewModels;
+namespace DroidPad.ViewModels;
 
 public partial class MainWindowViewModel : ObservableObject
 {
@@ -56,6 +56,14 @@ public partial class MainWindowViewModel : ObservableObject
     public bool HasSelection => IsTapSelected || IsJoystickSelected;
     public string ConnectionText => IsAdbConnected ? "Waydroid bağlı" : "Bağlı değil";
 
+    // Uygulama başına profiller
+    public ObservableCollection<string> ProfileNames { get; } = new();
+    [ObservableProperty] private string? _selectedProfileName;
+    [ObservableProperty] private bool _autoSwitchProfiles = true;
+    [ObservableProperty] private string _activeProfileName = ProfileService.DefaultName;
+    [ObservableProperty] private string? _foregroundPackage;
+    private bool _switching;
+
     private string? _rebindSlot;
     private readonly Stopwatch _recClock = new();
     private double _recLast;
@@ -86,8 +94,84 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task InitializeAsync()
     {
         await ConnectAsync();
-        if (File.Exists(ProfileService.DefaultPath))
+        if (ProfileService.Exists(ProfileService.DefaultName))
             await LoadProfileAsync(ProfileService.DefaultPath, silent: true);
+        RefreshProfileNames();
+        await WatchForegroundAsync();
+    }
+
+    // ================= Uygulama başına profil =================
+
+    private void RefreshProfileNames()
+    {
+        ProfileNames.Clear();
+        foreach (var n in ProfileService.List()) ProfileNames.Add(n);
+    }
+
+    /// <summary>Waydroid'de ön plandaki uygulamayı izler; o uygulamaya ait profil varsa otomatik yükler.</summary>
+    private async Task WatchForegroundAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2.5));
+        while (await timer.WaitForNextTickAsync())
+        {
+            if (!IsAdbConnected || _switching || State.IsEditMode || State.IsRecording || IsRunning) continue;
+
+            var pkg = await AdbService.GetForegroundPackageAsync();
+            if (pkg is null || pkg == ForegroundPackage) continue;
+            // Sistem arayüzü / başlatıcı görünümleri profil değişimini tetiklemesin
+            if (pkg.StartsWith("com.android.", StringComparison.Ordinal) || pkg.StartsWith("org.lineageos.", StringComparison.Ordinal)) continue;
+
+            ForegroundPackage = pkg;
+            if (!AutoSwitchProfiles) continue;
+
+            if (ProfileService.Exists(pkg)) await ActivateProfileAsync(pkg);
+            else if (ActiveProfileName != ProfileService.DefaultName) await ActivateProfileAsync(ProfileService.DefaultName);
+        }
+    }
+
+    /// <summary>Mevcut profili kaydedip adı verilen profile geçer.</summary>
+    private async Task ActivateProfileAsync(string name)
+    {
+        _switching = true;
+        try
+        {
+            ReleaseAllKeys();
+            await SaveProfileAsync(ProfileService.PathFor(ActiveProfileName), silent: true);
+            if (!ProfileService.Exists(name)) return;
+            await LoadProfileAsync(ProfileService.PathFor(name), silent: true);
+            ActiveProfileName = name;
+            LogService.Info($"Profil: {name}");
+        }
+        finally { _switching = false; }
+    }
+
+    [RelayCommand]
+    private async Task SaveForCurrentAppAsync()
+    {
+        if (ForegroundPackage is not { } pkg)
+        {
+            LogService.Warning("Ön plandaki uygulama algılanamadı.");
+            return;
+        }
+        await SaveProfileAsync(ProfileService.PathFor(ActiveProfileName), silent: true);
+        await SaveProfileAsync(ProfileService.PathFor(pkg));
+        ActiveProfileName = pkg;
+        RefreshProfileNames();
+    }
+
+    [RelayCommand]
+    private async Task LoadSelectedProfileAsync()
+    {
+        if (SelectedProfileName is { } name) await ActivateProfileAsync(name);
+    }
+
+    [RelayCommand]
+    private void DeleteSelectedProfile()
+    {
+        if (SelectedProfileName is not { } name || name == ProfileService.DefaultName) return;
+        ProfileService.Delete(name);
+        if (ActiveProfileName == name) ActiveProfileName = ProfileService.DefaultName;
+        RefreshProfileNames();
     }
 
     [RelayCommand]
@@ -140,7 +224,7 @@ public partial class MainWindowViewModel : ObservableObject
         State.PendingTool = null;
         State.IsContextMenuOpen = false;
         Select(null);
-        _ = SaveProfileAsync(ProfileService.DefaultPath, silent: true);
+        _ = SaveActiveAsync();
     }
 
     /// <summary>Klavye girdisi. true dönerse olay işlenmiş sayılır.</summary>
@@ -480,11 +564,17 @@ public partial class MainWindowViewModel : ObservableObject
         Rescale(DeviceWidth / (double)pw, DeviceHeight / (double)ph);
     }
 
+    private async Task SaveActiveAsync()
+    {
+        await SaveProfileAsync(ProfileService.PathFor(ActiveProfileName), silent: true);
+        RefreshProfileNames();
+    }
+
     public void Shutdown()
     {
         _automation.Stop();
         ReleaseAllKeys();
-        ProfileService.SaveAsync(ProfileService.DefaultPath, BuildProfile()).GetAwaiter().GetResult();
+        ProfileService.SaveAsync(ProfileService.PathFor(ActiveProfileName), BuildProfile()).GetAwaiter().GetResult();
         AdbService.Disconnect();
     }
 

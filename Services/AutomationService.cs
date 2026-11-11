@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using WaydroidController.Models;
+using DroidPad.Models;
 
-namespace WaydroidController.Services;
+namespace DroidPad.Services;
 
 public partial class AutomationService : ObservableObject
 {

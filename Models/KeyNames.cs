@@ -1,6 +1,6 @@
 using Avalonia.Input;
 
-namespace WaydroidController.Models;
+namespace DroidPad.Models;
 
 /// <summary>Tuş adlarını saklama (Key.ToString) ve ekranda gösterme biçimleri arasında çevirir.</summary>
 public static class KeyNames

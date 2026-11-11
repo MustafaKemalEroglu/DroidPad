@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace WaydroidController.Models;
+namespace DroidPad.Models;
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(ClickCommand), "click")]

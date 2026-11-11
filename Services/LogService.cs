@@ -1,8 +1,8 @@
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
-using WaydroidController.Models;
+using DroidPad.Models;
 
-namespace WaydroidController.Services;
+namespace DroidPad.Services;
 
 public static class LogService
 {

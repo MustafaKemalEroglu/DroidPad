@@ -1,11 +1,11 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:WaydroidController.ViewModels"
-        xmlns:m="using:WaydroidController.Models"
-        x:Class="WaydroidController.Views.OverlayWindow"
+        xmlns:vm="using:DroidPad.ViewModels"
+        xmlns:m="using:DroidPad.Models"
+        x:Class="DroidPad.Views.OverlayWindow"
         x:DataType="vm:MainWindowViewModel"
         x:CompileBindings="True"
-        Title="Waydroid Controller"
+        Title="DroidPad"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
         WindowDecorations="None"
@@ -169,9 +169,18 @@
                         <Button Classes="danger" Content="🗑  Seçiliyi Sil (Del)" Command="{Binding DeleteSelectedCommand}" IsVisible="{Binding HasSelection}"/>
 
                         <TextBlock Classes="section" Text="PROFİL"/>
+                        <TextBlock Classes="hint" Text="{Binding ActiveProfileName, StringFormat='Aktif profil: {0}'}"/>
+                        <TextBlock Classes="hint" Text="{Binding ForegroundPackage, StringFormat='Ön plandaki uygulama: {0}'}"/>
+                        <Button Classes="primary" Content="Bu uygulama için profil olarak kaydet" Command="{Binding SaveForCurrentAppCommand}"/>
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+                            <ComboBox ItemsSource="{Binding ProfileNames}" SelectedItem="{Binding SelectedProfileName}" HorizontalAlignment="Stretch"/>
+                            <Button Grid.Column="1" Content="Yükle" Command="{Binding LoadSelectedProfileCommand}"/>
+                            <Button Grid.Column="2" Classes="danger" Content="Sil" Command="{Binding DeleteSelectedProfileCommand}"/>
+                        </Grid>
+                        <CheckBox Content="Uygulamaya göre otomatik geç" IsChecked="{Binding AutoSwitchProfiles}"/>
                         <UniformGrid Columns="2">
-                            <Button Margin="2" Classes="primary" Content="💾 Kaydet" Click="OnSaveProfileClick"/>
-                            <Button Margin="2" Content="📂 Yükle" Click="OnLoadProfileClick"/>
+                            <Button Margin="2" Content="💾 Dışa aktar" Click="OnSaveProfileClick"/>
+                            <Button Margin="2" Content="📂 İçe aktar" Click="OnLoadProfileClick"/>
                         </UniformGrid>
                         <Button Content="Tüm Eşlemeleri Temizle" Command="{Binding ClearMappingsCommand}"/>
                         <CheckBox Content="Oyun modunda tuşları göster" IsChecked="{Binding State.ShowKeys}"/>
@@ -240,8 +249,8 @@
 
                         <TextBlock Classes="section" Text="PROFİL"/>
                         <UniformGrid Columns="2">
-                            <Button Margin="2" Classes="primary" Content="💾 Kaydet" Click="OnSaveProfileClick"/>
-                            <Button Margin="2" Content="📂 Yükle" Click="OnLoadProfileClick"/>
+                            <Button Margin="2" Classes="primary" Content="💾 Dışa aktar" Click="OnSaveProfileClick"/>
+                            <Button Margin="2" Content="📂 İçe aktar" Click="OnLoadProfileClick"/>
                         </UniformGrid>
                     </StackPanel>
                 </ScrollViewer>

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace WaydroidController.Models;
+namespace DroidPad.Models;
 
 public sealed class Coordinate
 {
