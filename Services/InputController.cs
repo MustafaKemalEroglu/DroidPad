@@ -140,7 +140,7 @@ public sealed class InputController
         StopTurbo(t);
         void Fire() => TapWithStickRestore((int)Math.Round(t.X), (int)Math.Round(t.Y));
         Fire();
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Math.Clamp(t.IntervalMs, 30, 1000)) };
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Math.Clamp(t.IntervalMs, KeyBinding.MinTurboMs, 1000)) };
         timer.Tick += (_, _) => Fire();
         _turbo[t] = timer;
         timer.Start();

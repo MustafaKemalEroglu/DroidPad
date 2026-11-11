@@ -122,12 +122,12 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Waydroid'de ön plandaki uygulamayı izler; o uygulamaya ait profil varsa otomatik yükler.</summary>
     private async Task WatchForegroundAsync()
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2.5));
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
         while (await timer.WaitForNextTickAsync())
         {
-            if (!IsAdbConnected || _switching || State.IsEditMode || State.IsRecording || IsRunning) continue;
+            if (!IsAdbConnected || !WindowActive || _switching || State.IsEditMode || State.IsRecording || IsRunning) continue;
 
-            var pkg = await AdbService.GetForegroundPackageAsync();
+            var pkg = await Task.Run(AdbService.GetForegroundPackageAsync);
             if (pkg is null || pkg == ForegroundPackage) continue;
             // Sistem arayüzü / başlatıcı görünümleri profil değişimini tetiklemesin
             if (pkg.StartsWith("com.android.", StringComparison.Ordinal) || pkg.StartsWith("org.lineageos.", StringComparison.Ordinal)) continue;
@@ -177,11 +177,18 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void DeleteSelectedProfile()
+    private async Task DeleteSelectedProfileAsync()
     {
         if (SelectedProfileName is not { } name || name == ProfileService.DefaultName) return;
+        var wasActive = ActiveProfileName == name;
         ProfileService.Delete(name);
-        if (ActiveProfileName == name) ActiveProfileName = ProfileService.DefaultName;
+        if (wasActive)
+        {
+            // Bellekte silinen profilin içeriği kalmasın; aksi halde default.json'un üzerine yazılır
+            ActiveProfileName = ProfileService.DefaultName;
+            if (ProfileService.Exists(ProfileService.DefaultName))
+                await LoadProfileAsync(ProfileService.DefaultPath, silent: true);
+        }
         RefreshProfileNames();
     }
 
@@ -210,11 +217,13 @@ public partial class MainWindowViewModel : ObservableObject
         if (Math.Abs(sx - 1) < 1e-6 && Math.Abs(sy - 1) < 1e-6) return;
         foreach (var k in KeyBindings) { k.X *= sx; k.Y *= sy; k.EndX *= sx; k.EndY *= sy; }
         foreach (var j in JoystickGroups) { j.X *= sx; j.Y *= sy; j.Radius *= (sx + sy) / 2; }
+        var selectedName = SelectedCoordinate?.Name;
         for (var i = 0; i < Coordinates.Count; i++)
         {
             var c = Coordinates[i];
             Coordinates[i] = new Coordinate { Name = c.Name, X = (int)Math.Round(c.X * sx), Y = (int)Math.Round(c.Y * sy) };
         }
+        if (selectedName is not null) SelectedCoordinate = Coordinates.FirstOrDefault(c => c.Name == selectedName);
     }
 
     // ================= Paneller & kısayollar =================
@@ -280,19 +289,24 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>Yazma modu: oyun tuşları askıya alınır, basılan tuşlar cihazdaki metin kutusuna gider.</summary>
-    private bool _manualTyping, _imeShown;
+    private bool _manualTyping, _imeShown, _imeIgnored;
 
-    private void ToggleTyping() => SetManualTyping(!_manualTyping);
+    /// <summary>Pencere aktif değilken yoklama yapılmaz (gereksiz adb/dumpsys yükü).</summary>
+    public bool WindowActive { get; set; } = true;
+
+    private void ToggleTyping() => SetManualTyping(!State.IsTyping);
 
     private void SetManualTyping(bool on)
     {
         _manualTyping = on;
+        // IME yanlış algılansa bile kullanıcı çıkabilsin: klavye kapanana kadar yoksay
+        if (!on && _imeShown) _imeIgnored = true;
         RefreshTyping();
     }
 
     private void RefreshTyping()
     {
-        var on = _manualTyping || _imeShown;
+        var on = _manualTyping || (_imeShown && !_imeIgnored);
         if (on == State.IsTyping) return;
         if (on) ReleaseAllKeys(); // takılı kalan WASD vb. bırakılsın
         State.IsTyping = on;
@@ -301,13 +315,15 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Android ekran klavyesi açıkken (metin kutusu odakta) oyun tuşlarını geçici olarak askıya alır.</summary>
     private async Task WatchKeyboardAsync()
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(1000));
         while (await timer.WaitForNextTickAsync())
         {
-            if (!IsAdbConnected) { _imeShown = false; RefreshTyping(); continue; }
-            var shown = await AdbService.IsKeyboardShownAsync();
+            if (!IsAdbConnected) { _imeShown = _imeIgnored = false; RefreshTyping(); continue; }
+            if (!WindowActive) continue;
+            var shown = await Task.Run(AdbService.IsKeyboardShownAsync); // süreç başlatma UI iş parçacığında olmasın
             if (shown is null) continue;
             _imeShown = shown.Value;
+            if (!_imeShown) _imeIgnored = false;
             RefreshTyping();
         }
     }
@@ -321,13 +337,13 @@ public partial class MainWindowViewModel : ObservableObject
                 SetManualTyping(false);
                 return;
             case "Return" or "Enter":
-                AdbService.KeyEvent("KEYCODE_ENTER");
+                AdbService.KeyEvent("KEYCODE_ENTER", background: false);
                 SetManualTyping(false);
                 return;
-            case "Back": AdbService.KeyEvent("KEYCODE_DEL"); return;
-            case "Delete": AdbService.KeyEvent("KEYCODE_FORWARD_DEL"); return;
-            case "Left": AdbService.KeyEvent("KEYCODE_DPAD_LEFT"); return;
-            case "Right": AdbService.KeyEvent("KEYCODE_DPAD_RIGHT"); return;
+            case "Back": AdbService.KeyEvent("KEYCODE_DEL", background: false); return;
+            case "Delete": AdbService.KeyEvent("KEYCODE_FORWARD_DEL", background: false); return;
+            case "Left": AdbService.KeyEvent("KEYCODE_DPAD_LEFT", background: false); return;
+            case "Right": AdbService.KeyEvent("KEYCODE_DPAD_RIGHT", background: false); return;
         }
         if (!string.IsNullOrEmpty(symbol) && !char.IsControl(symbol[0])) AdbService.Text(symbol);
     }
@@ -475,7 +491,7 @@ public partial class MainWindowViewModel : ObservableObject
     private void AdjustTurbo(string delta)
     {
         if (SelectedTap is { } t && int.TryParse(delta, out var d))
-            t.IntervalMs = Math.Clamp(t.IntervalMs + d, 30, 1000);
+            t.IntervalMs = Math.Clamp(t.IntervalMs + d, KeyBinding.MinTurboMs, 1000);
     }
 
     [RelayCommand]
@@ -803,7 +819,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         _automation.Stop();
         ReleaseAllKeys();
-        ProfileService.SaveAsync(ProfileService.PathFor(ActiveProfileName), BuildProfile()).GetAwaiter().GetResult();
+        ProfileService.Save(ProfileService.PathFor(ActiveProfileName), BuildProfile());
         AdbService.Disconnect();
     }
 

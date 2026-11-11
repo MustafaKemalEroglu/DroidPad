@@ -49,11 +49,12 @@ public static partial class AdbService
                 var address = await DiscoverAddressAsync();
                 LogService.Info($"Cihaz bulunamadı, bağlanılıyor: {address}");
                 var (code, _) = await RunAsync("adb", $"connect {address}", 8000);
-                if (code < 0)
+                if (code == -1)
                 {
                     LogService.Error("'adb' çalıştırılamadı. Kurulu olduğundan emin olun (android-tools).");
                     return Fail();
                 }
+                if (code == -2) LogService.Warning("'adb connect' zaman aşımına uğradı.");
                 device = await FindDeviceAsync();
             }
 
@@ -95,6 +96,7 @@ public static partial class AdbService
                     _session = null;
                     LogService.Warning("ADB bağlantısı koptu.");
                     ConnectionChanged?.Invoke(false);
+                    session.Close(); // yazıcı iş parçacığı ve süreç sızmasın
                 }
             };
 
@@ -123,7 +125,9 @@ public static partial class AdbService
     {
         var s = _session;
         _session = null;
-        s?.Close();
+        if (s is null) return;
+        s.Close();
+        ConnectionChanged?.Invoke(false);
     }
 
     private static async Task<string?> FindDeviceAsync()
@@ -156,18 +160,26 @@ public static partial class AdbService
     [GeneratedRegex("^[A-Za-z0-9_]+$")]
     private static partial Regex KeycodeRegex();
 
-    private static async Task<(int Exit, string Output)> RunAsync(string file, string args, int timeoutMs)
+    private static Task<(int Exit, string Output)> RunAsync(string file, string args, int timeoutMs) =>
+        RunCoreAsync(new ProcessStartInfo(file, args), timeoutMs);
+
+    private static Task<(int Exit, string Output)> RunAsync(string file, IEnumerable<string> args, int timeoutMs)
+    {
+        var psi = new ProcessStartInfo(file);
+        foreach (var a in args) psi.ArgumentList.Add(a);
+        return RunCoreAsync(psi, timeoutMs);
+    }
+
+    private static async Task<(int Exit, string Output)> RunCoreAsync(ProcessStartInfo psi, int timeoutMs)
     {
         try
         {
-            using var p = Process.Start(new ProcessStartInfo(file, args)
-            {
-                RedirectStandardInput = true, // miras alınan stdin'de 'adb shell' EOF bekleyip takılır
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
+            psi.RedirectStandardInput = true; // miras alınan stdin'de 'adb shell' EOF bekleyip takılır
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
+            psi.UseShellExecute = false;
+            psi.CreateNoWindow = true;
+            using var p = Process.Start(psi);
             if (p is null) return (-1, "");
             p.StandardInput.Close();
 
@@ -186,7 +198,6 @@ public static partial class AdbService
                 return (-2, "");
             }
         }
-        catch (Win32Exception) { return (-1, ""); }
         catch (Exception) { return (-1, ""); }
     }
 
@@ -273,7 +284,7 @@ public static partial class AdbService
     public static async Task<bool> InstallApkAsync(string apkPath)
     {
         if (!await EnsureConnectedAsync()) return false;
-        var (code, output) = await RunAsync("adb", $"-s {_device} install -r \"{apkPath}\"", 180000);
+        var (code, output) = await RunAsync("adb", new[] { "-s", _device, "install", "-r", apkPath }, 180000);
         if (code == 0 && output.Contains("Success", StringComparison.OrdinalIgnoreCase)) return true;
         LogService.Error($"APK kurulamadı: {output.Trim()}");
         return false;
@@ -304,24 +315,25 @@ public static partial class AdbService
     /// <summary>Aynı noktada uzun süre kalan "swipe" uzun basma sayılır.</summary>
     public static void LongPress(int x, int y, int durationMs) => Swipe(x, y, x, y, durationMs);
 
-    /// <summary>"input text" yalnızca ASCII destekler; boşluk %s, kabuk özel karakterleri tırnaklanır.</summary>
+    /// <summary>"input text" yalnızca ASCII destekler; boşluk %s olur ("%" için kaçış yoktur), kabuk özel karakterleri tırnaklanır.</summary>
     public static void Text(string text)
     {
         var ascii = new string(text.Where(c => c is >= ' ' and <= '~').ToArray());
         if (ascii.Length != text.Length) LogService.Warning("Metindeki ASCII olmayan karakterler atlandı.");
         if (ascii.Length == 0) return;
-        var escaped = ascii.Replace("%", "%%").Replace(" ", "%s").Replace("'", "'\\''");
+        var escaped = ascii.Replace(" ", "%s").Replace("'", "'\\''");
         Send($"input text '{escaped}'");
     }
 
-    public static void KeyEvent(string keycode)
+    /// <param name="background">false: sıralı çalışır (yazma modunda Backspace/Enter, metinle yarışmasın).</param>
+    public static void KeyEvent(string keycode, bool background = true)
     {
         if (!KeycodeRegex().IsMatch(keycode))
         {
             LogService.Error($"Geçersiz keycode: '{keycode}'");
             return;
         }
-        Send($"input keyevent {keycode} &");
+        Send($"input keyevent {keycode}{(background ? " &" : "")}");
     }
 
     public static void TouchDown(int x, int y) => Send($"input motionevent DOWN {x} {y}");
@@ -377,11 +389,24 @@ public static partial class AdbService
                 }
                 else
                 {
-                    if (_queue.Count >= 512) _queue.RemoveFirst();
+                    if (_queue.Count >= 2048) DropOldest();
                     _queue.AddLast(command);
                 }
                 Monitor.Pulse(_lock);
             }
+        }
+
+        /// <summary>Taşmada en eski komutu atar; DOWN/UP atılırsa dokunuş cihazda takılı kalır, bu yüzden onlar korunur.</summary>
+        private void DropOldest()
+        {
+            for (var n = _queue.First; n is not null; n = n.Next)
+            {
+                if (n.Value.StartsWith("input motionevent DOWN", StringComparison.Ordinal) ||
+                    n.Value.StartsWith("input motionevent UP", StringComparison.Ordinal)) continue;
+                _queue.Remove(n);
+                return;
+            }
+            _queue.RemoveFirst();
         }
 
         private void Loop()

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -63,14 +64,36 @@ public static class ProfileService
         catch { /* taşıma başarısızsa sıfırdan başlanır */ }
     }
 
-    public static async Task<(bool Success, string Message)> SaveAsync(string path, Profile profile)
+    private static readonly ConcurrentDictionary<string, object> Locks = new();
+
+    /// <summary>Eşzamanlı kayıt; kapanışta UI iş parçacığını bir sync-over-async deadlock'una sokmamak için kullanılır.</summary>
+    public static (bool Success, string Message) Save(string path, Profile profile)
+    {
+        try { return Write(path, JsonSerializer.Serialize(profile, Options)); }
+        catch (Exception ex) { return (false, $"Kaydetme hatası: {ex.Message}"); }
+    }
+
+    public static Task<(bool Success, string Message)> SaveAsync(string path, Profile profile)
+    {
+        string json;
+        try { json = JsonSerializer.Serialize(profile, Options); } // anlık görüntü çağıran iş parçacığında alınır
+        catch (Exception ex) { return Task.FromResult((false, $"Kaydetme hatası: {ex.Message}")); }
+        return Task.Run(() => Write(path, json));
+    }
+
+    private static (bool Success, string Message) Write(string path, string json)
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-            var tmp = path + ".tmp"; // yarım kalan yazım mevcut profili bozmasın
-            await File.WriteAllTextAsync(tmp, JsonSerializer.Serialize(profile, Options));
-            File.Move(tmp, path, overwrite: true);
+            var full = Path.GetFullPath(path);
+            // Aynı dosyaya eşzamanlı yazımlar aynı .tmp dosyasını bozmasın
+            lock (Locks.GetOrAdd(full, _ => new object()))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+                var tmp = full + ".tmp"; // yarım kalan yazım mevcut profili bozmasın
+                File.WriteAllText(tmp, json);
+                File.Move(tmp, full, overwrite: true);
+            }
             return (true, $"Profil kaydedildi: {Path.GetFileName(path)}");
         }
         catch (Exception ex)
@@ -88,6 +111,12 @@ public static class ProfileService
             return profile is null
                 ? (false, "Profil boş.", null)
                 : (true, $"Profil yüklendi: {Path.GetFileName(path)}", profile);
+        }
+        catch (JsonException ex)
+        {
+            // Bozuk dosya sonradan boş durumla ezilmesin: yedeğini al
+            try { File.Copy(path, path + ".bak", overwrite: true); } catch { }
+            return (false, $"Yükleme hatası ({Path.GetFileName(path)} → .bak olarak yedeklendi): {ex.Message}", null);
         }
         catch (Exception ex)
         {

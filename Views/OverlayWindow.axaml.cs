@@ -46,7 +46,13 @@ public partial class OverlayWindow : Window
         AddHandler(PointerPressedEvent, OnWindowRightPressed, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel); // Tab vb. odak tuşlarını kontrollerden önce yakala
         AddHandler(KeyUpEvent, OnWindowKeyUp, RoutingStrategies.Tunnel);
-        Deactivated += (_, _) => Vm?.ReleaseAllKeys();
+        Activated += (_, _) => { if (Vm is { } v) v.WindowActive = true; };
+        Deactivated += (_, _) =>
+        {
+            if (Vm is not { } v) return;
+            v.WindowActive = false;
+            v.ReleaseAllKeys();
+        };
         Closing += (_, _) => Vm?.Shutdown();
 
         LogService.Entries.CollectionChanged += OnLogChanged;

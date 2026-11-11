@@ -9,6 +9,8 @@ namespace DroidPad.Services;
 
 public sealed class MacroEngine
 {
+    private const int SwipeMs = 300;
+
     public async Task RunAsync(
         IReadOnlyList<MacroCommand> source,
         IReadOnlyDictionary<string, Coordinate> coordinates,
@@ -55,7 +57,8 @@ public sealed class MacroEngine
 
                 case SwipeCommand s:
                     AdbService.Swipe(coordinates[s.Start].X, coordinates[s.Start].Y,
-                                     coordinates[s.End].X, coordinates[s.End].Y);
+                                     coordinates[s.End].X, coordinates[s.End].Y, SwipeMs);
+                    await Task.Delay(SwipeMs, ct); // sonraki komut hareketle çakışmasın
                     i++;
                     break;
 
@@ -86,7 +89,7 @@ public sealed class MacroEngine
                         (remaining[start] < 0 || --remaining[start] > 0))
                     {
                         // Bekleme içermeyen döngünün cihazı boğmasını önle
-                        await Task.Delay(20, ct);
+                        await Task.Delay(50, ct);
                         i = start + 1;
                     }
                     else i++;

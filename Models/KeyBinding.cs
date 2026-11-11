@@ -12,6 +12,8 @@ public static class BindingKind
 public partial class KeyBinding : ObservableObject
 {
     public const double Size = 46;
+    /// <summary>Her tetikleme cihazda bir "input" süreci başlatır; daha sık tekrar Waydroid'i boğar.</summary>
+    public const int MinTurboMs = 100;
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(KeyLabel))] private string _keyName = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Left))] private double _x;
@@ -21,7 +23,7 @@ public partial class KeyBinding : ObservableObject
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSwipe), nameof(Badge))] private string _kind = BindingKind.Tap;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(EndLeft))] private double _endX;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(EndTop))] private double _endY;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(Badge))] private int _intervalMs = 80;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Badge))] private int _intervalMs = 100;
 
     [ObservableProperty] [property: JsonIgnore] private bool _isPressed;
     [ObservableProperty] [property: JsonIgnore] private bool _isSelected;
