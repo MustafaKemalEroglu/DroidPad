@@ -42,12 +42,23 @@ public partial class OverlayWindow : Window
         ItemsLayer.AddHandler(PointerMovedEvent, OnItemMoved, RoutingStrategies.Bubble);
         ItemsLayer.AddHandler(PointerReleasedEvent, OnItemReleased, RoutingStrategies.Bubble);
 
+        AddHandler(PointerPressedEvent, OnWindowRightPressed, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Bubble);
         AddHandler(KeyUpEvent, OnWindowKeyUp, RoutingStrategies.Bubble);
         Deactivated += (_, _) => Vm?.ReleaseAllKeys();
         Closing += (_, _) => Vm?.Shutdown();
 
         LogService.Entries.CollectionChanged += OnLogChanged;
+
+        // Menüdeki bir kontrol odağı tutmasın; tuş basışları pencereye gitsin
+        DataContextChanged += (_, _) =>
+        {
+            if (Vm is { } v)
+                v.State.PropertyChanged += (_, a) =>
+                {
+                    if (a.PropertyName == nameof(EditorState.RebindHint) && v.State.IsWaitingForKey) Dispatcher.UIThread.Post(() => Focus());
+                };
+        };
     }
 
     private MainWindowViewModel? Vm => DataContext as MainWindowViewModel;
@@ -72,19 +83,6 @@ public partial class OverlayWindow : Window
         if (Vm is not { } vm) return;
         var point = e.GetCurrentPoint(Root);
         var state = vm.State;
-
-        if (point.Properties.IsRightButtonPressed)
-        {
-            if (!state.IsEditMode) return;
-            var dev = ToDevice(point.Position);
-            state.ContextMenuX = Math.Clamp(point.Position.X, 0, Math.Max(0, Root.Bounds.Width - 200));
-            state.ContextMenuY = Math.Clamp(point.Position.Y, 0, Math.Max(0, Root.Bounds.Height - 150));
-            state.ContextDeviceX = dev.X;
-            state.ContextDeviceY = dev.Y;
-            state.IsContextMenuOpen = true;
-            e.Handled = true;
-            return;
-        }
 
         if (!point.Properties.IsLeftButtonPressed) return;
         Focus();
@@ -117,6 +115,28 @@ public partial class OverlayWindow : Window
         _touchStart = d;
         vm.TouchDown(d.X, d.Y);
         e.Pointer.Capture(Surface);
+        e.Handled = true;
+    }
+
+    // Düzenleme modunda sağ tık her yerde (tuşların üstünde dahil) menüyü açar
+    private void OnWindowRightPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (Vm is not { } vm || !vm.State.IsEditMode) return;
+        var point = e.GetCurrentPoint(Root);
+        if (!point.Properties.IsRightButtonPressed) return;
+        if (e.Source is Visual src && (src == ContextMenuBorder || ContextMenuBorder.IsVisualAncestorOf(src))) return;
+
+        var state = vm.State;
+        Focus();
+        vm.Select(FindItem(e.Source));
+        state.PendingTool = null;
+
+        var dev = ToDevice(point.Position);
+        state.ContextDeviceX = dev.X;
+        state.ContextDeviceY = dev.Y;
+        state.ContextMenuX = Math.Clamp(point.Position.X, 0, Math.Max(0, Root.Bounds.Width - 240));
+        state.ContextMenuY = Math.Clamp(point.Position.Y, 0, Math.Max(0, Root.Bounds.Height - 560));
+        state.IsContextMenuOpen = true;
         e.Handled = true;
     }
 
@@ -171,6 +191,14 @@ public partial class OverlayWindow : Window
         vm.State.IsContextMenuOpen = false;
         vm.State.PendingTool = null;
         vm.Select(item);
+        Focus();
+
+        if (e.ClickCount >= 2)
+        {
+            vm.BeginRebindForSelected();
+            e.Handled = true;
+            return;
+        }
 
         _dragItem = item;
         _dragOrigin = ToDevice(e.GetPosition(Root));

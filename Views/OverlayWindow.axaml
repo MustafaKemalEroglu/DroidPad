@@ -92,7 +92,7 @@
         <StackPanel VerticalAlignment="Top" HorizontalAlignment="Center" Spacing="6" Margin="0,14,0,0" IsHitTestVisible="False">
             <Border Background="#E62F6FED" IsVisible="{Binding State.IsEditMode}" Padding="14,7" CornerRadius="8">
                 <TextBlock Foreground="White" FontWeight="SemiBold" FontSize="12"
-                           Text="Tuş Eşleme  ·  Sağ tık: öğe ekle  ·  Sürükle: taşı  ·  Del: sil  ·  F12: kapat"/>
+                           Text="Tuş Eşleme  ·  Sağ tık: menü  ·  Sürükle: taşı  ·  Del: sil  ·  F12: kapat"/>
             </Border>
             <Border Background="#E6D98E04" IsVisible="{Binding State.IsWaitingForKey}" Padding="14,7" CornerRadius="8">
                 <TextBlock Foreground="Black" FontWeight="Bold" FontSize="13" Text="{Binding State.RebindHint}"/>
@@ -111,83 +111,60 @@
             </Border>
         </StackPanel>
 
-        <!-- 4. Sağ tık menüsü -->
-        <Border IsVisible="{Binding State.IsContextMenuOpen}" ZIndex="1000"
-                HorizontalAlignment="Left" VerticalAlignment="Top" Width="190"
+        <!-- 4. Sağ tık menüsü (tuş eşleme modunun tek kontrol yüzeyi) -->
+        <Border x:Name="ContextMenuBorder" IsVisible="{Binding State.IsContextMenuOpen}" ZIndex="1000"
+                HorizontalAlignment="Left" VerticalAlignment="Top" Width="230"
                 Background="#F01B1E24" BorderBrush="#343944" BorderThickness="1" CornerRadius="8" Padding="6">
             <Border.RenderTransform>
                 <TranslateTransform X="{Binding State.ContextMenuX}" Y="{Binding State.ContextMenuY}"/>
             </Border.RenderTransform>
             <StackPanel Spacing="4">
+                <StackPanel Spacing="4" IsVisible="{Binding HasSelection}">
+                    <TextBlock Classes="section" Text="SEÇİLİ ÖĞE"/>
+                    <Button Classes="primary" Content="{Binding SelectedTap.KeyLabel, StringFormat='Tuş: {0}  —  değiştir'}"
+                            IsVisible="{Binding IsTapSelected}" Command="{Binding BeginRebindCommand}" CommandParameter="key"/>
+                    <StackPanel Spacing="4" IsVisible="{Binding IsJoystickSelected}">
+                        <UniformGrid Columns="4">
+                            <Button Margin="2" Content="{Binding SelectedJoystick.UpLabel, StringFormat='↑ {0}'}" Command="{Binding BeginRebindCommand}" CommandParameter="up"/>
+                            <Button Margin="2" Content="{Binding SelectedJoystick.LeftLabel, StringFormat='← {0}'}" Command="{Binding BeginRebindCommand}" CommandParameter="left"/>
+                            <Button Margin="2" Content="{Binding SelectedJoystick.DownLabel, StringFormat='↓ {0}'}" Command="{Binding BeginRebindCommand}" CommandParameter="down"/>
+                            <Button Margin="2" Content="{Binding SelectedJoystick.RightLabel, StringFormat='→ {0}'}" Command="{Binding BeginRebindCommand}" CommandParameter="right"/>
+                        </UniformGrid>
+                        <UniformGrid Columns="2">
+                            <Button Margin="2" Content="Yarıçap −" Command="{Binding ResizeJoystickCommand}" CommandParameter="-10"/>
+                            <Button Margin="2" Content="Yarıçap +" Command="{Binding ResizeJoystickCommand}" CommandParameter="10"/>
+                        </UniformGrid>
+                    </StackPanel>
+                    <Button Classes="danger" Content="🗑  Sil" Command="{Binding DeleteSelectedCommand}"/>
+                </StackPanel>
+
                 <TextBlock Classes="section" Text="BURAYA EKLE"/>
                 <Button Classes="tool" Content="⊙  Tuş (Tap)" Command="{Binding AddFromContextMenuCommand}" CommandParameter="tap"/>
                 <Button Classes="tool" Content="✥  Joystick (WASD)" Command="{Binding AddFromContextMenuCommand}" CommandParameter="wasd"/>
                 <Button Classes="tool" Content="✥  Joystick (Oklar)" Command="{Binding AddFromContextMenuCommand}" CommandParameter="arrows"/>
+                <Button Classes="tool" Content="✥  Joystick (Numpad)" Command="{Binding AddFromContextMenuCommand}" CommandParameter="numpad"/>
+
+                <TextBlock Classes="section" Text="PROFİL"/>
+                <TextBlock Classes="hint" Text="{Binding ActiveProfileName, StringFormat='Aktif: {0}'}"/>
+                <Button Content="Bu uygulama için kaydet" Command="{Binding SaveForCurrentAppCommand}"/>
+                <ComboBox ItemsSource="{Binding ProfileNames}" SelectedItem="{Binding SelectedProfileName}" HorizontalAlignment="Stretch"/>
+                <UniformGrid Columns="2">
+                    <Button Margin="2" Content="Yükle" Command="{Binding LoadSelectedProfileCommand}"/>
+                    <Button Margin="2" Classes="danger" Content="Sil" Command="{Binding DeleteSelectedProfileCommand}"/>
+                    <Button Margin="2" Content="💾 Dışa" Click="OnSaveProfileClick"/>
+                    <Button Margin="2" Content="📂 İçe" Click="OnLoadProfileClick"/>
+                </UniformGrid>
+                <CheckBox Content="Uygulamaya göre otomatik geç" IsChecked="{Binding AutoSwitchProfiles}"/>
+                <CheckBox Content="Oyun modunda tuşları göster" IsChecked="{Binding State.ShowKeys}"/>
+                <Button Content="Tüm Eşlemeleri Temizle" Command="{Binding ClearMappingsCommand}"/>
+                <Button Classes="success" Content="✔  Tuş eşlemeyi kapat (F12)" Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:PanelKind.Keys}"/>
             </StackPanel>
         </Border>
 
         <!-- 5. Yan panel -->
-        <Border IsVisible="{Binding State.IsAnyPanel}" HorizontalAlignment="Right" VerticalAlignment="Stretch"
+        <Border IsVisible="{Binding State.IsSidePanel}" HorizontalAlignment="Right" VerticalAlignment="Stretch"
                 Width="310" Margin="0,10,60,10" Background="#F2181A1F" BorderBrush="#2A2E37" BorderThickness="1" CornerRadius="12">
             <Grid>
-                <!-- TUŞ EŞLEME -->
-                <ScrollViewer IsVisible="{Binding State.IsKeysPanel}" Padding="14">
-                    <StackPanel Spacing="8">
-                        <TextBlock Classes="title" Text="⌨  Tuş Eşleme"/>
-                        <TextBlock Classes="hint" Text="Bir araç seçip ekrana tıklayın veya boş alana sağ tıklayın. Öğeleri sürükleyerek taşıyın."/>
-
-                        <TextBlock Classes="section" Text="ARAÇLAR"/>
-                        <Button Classes="tool" Classes.active="{Binding State.PendingTool, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=tap}"
-                                Content="⊙   Tuş (Tap)" Command="{Binding SelectToolCommand}" CommandParameter="tap"/>
-                        <Button Classes="tool" Classes.active="{Binding State.PendingTool, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=wasd}"
-                                Content="✥   Joystick (WASD)" Command="{Binding SelectToolCommand}" CommandParameter="wasd"/>
-                        <Button Classes="tool" Classes.active="{Binding State.PendingTool, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=arrows}"
-                                Content="✥   Joystick (Oklar)" Command="{Binding SelectToolCommand}" CommandParameter="arrows"/>
-                        <Button Classes="tool" Classes.active="{Binding State.PendingTool, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=numpad}"
-                                Content="✥   Joystick (Numpad)" Command="{Binding SelectToolCommand}" CommandParameter="numpad"/>
-
-                        <TextBlock Classes="section" Text="SEÇİLİ ÖĞE"/>
-                        <TextBlock Classes="hint" Text="Düzenlemek için bir tuşa veya joystick'e tıklayın." IsVisible="{Binding !HasSelection}"/>
-
-                        <StackPanel Spacing="6" IsVisible="{Binding IsTapSelected}">
-                            <Button Classes="primary" Content="{Binding SelectedTap.KeyLabel, StringFormat='Tuş: {0}   —   değiştir'}"
-                                    Command="{Binding BeginRebindCommand}" CommandParameter="key"/>
-                        </StackPanel>
-
-                        <StackPanel Spacing="6" IsVisible="{Binding IsJoystickSelected}">
-                            <UniformGrid Columns="4">
-                                <Button Margin="2" Content="{Binding SelectedJoystick.UpLabel, StringFormat='↑ {0}'}" Command="{Binding BeginRebindCommand}" CommandParameter="up"/>
-                                <Button Margin="2" Content="{Binding SelectedJoystick.LeftLabel, StringFormat='← {0}'}" Command="{Binding BeginRebindCommand}" CommandParameter="left"/>
-                                <Button Margin="2" Content="{Binding SelectedJoystick.DownLabel, StringFormat='↓ {0}'}" Command="{Binding BeginRebindCommand}" CommandParameter="down"/>
-                                <Button Margin="2" Content="{Binding SelectedJoystick.RightLabel, StringFormat='→ {0}'}" Command="{Binding BeginRebindCommand}" CommandParameter="right"/>
-                            </UniformGrid>
-                            <TextBlock Classes="hint" Text="Yön tuşlarına tıklayıp yeni tuşa basın."/>
-                            <TextBlock Classes="section" Text="YARIÇAP"/>
-                            <Slider Minimum="40" Maximum="260" Value="{Binding SelectedJoystick.Radius}"/>
-                        </StackPanel>
-
-                        <Button Classes="danger" Content="🗑  Seçiliyi Sil (Del)" Command="{Binding DeleteSelectedCommand}" IsVisible="{Binding HasSelection}"/>
-
-                        <TextBlock Classes="section" Text="PROFİL"/>
-                        <TextBlock Classes="hint" Text="{Binding ActiveProfileName, StringFormat='Aktif profil: {0}'}"/>
-                        <TextBlock Classes="hint" Text="{Binding ForegroundPackage, StringFormat='Ön plandaki uygulama: {0}'}"/>
-                        <Button Classes="primary" Content="Bu uygulama için profil olarak kaydet" Command="{Binding SaveForCurrentAppCommand}"/>
-                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
-                            <ComboBox ItemsSource="{Binding ProfileNames}" SelectedItem="{Binding SelectedProfileName}" HorizontalAlignment="Stretch"/>
-                            <Button Grid.Column="1" Content="Yükle" Command="{Binding LoadSelectedProfileCommand}"/>
-                            <Button Grid.Column="2" Classes="danger" Content="Sil" Command="{Binding DeleteSelectedProfileCommand}"/>
-                        </Grid>
-                        <CheckBox Content="Uygulamaya göre otomatik geç" IsChecked="{Binding AutoSwitchProfiles}"/>
-                        <UniformGrid Columns="2">
-                            <Button Margin="2" Content="💾 Dışa aktar" Click="OnSaveProfileClick"/>
-                            <Button Margin="2" Content="📂 İçe aktar" Click="OnLoadProfileClick"/>
-                        </UniformGrid>
-                        <Button Content="Tüm Eşlemeleri Temizle" Command="{Binding ClearMappingsCommand}"/>
-                        <CheckBox Content="Oyun modunda tuşları göster" IsChecked="{Binding State.ShowKeys}"/>
-                        <TextBlock Classes="hint" Text="Değişiklikler panel kapanınca ve çıkışta otomatik kaydedilir."/>
-                    </StackPanel>
-                </ScrollViewer>
-
                 <!-- MAKRO -->
                 <ScrollViewer IsVisible="{Binding State.IsMacroPanel}" Padding="14">
                     <StackPanel Spacing="8">

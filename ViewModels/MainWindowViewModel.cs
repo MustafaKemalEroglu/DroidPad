@@ -213,6 +213,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         var next = State.ActivePanel == kind ? PanelKind.None : kind;
         if (State.ActivePanel == PanelKind.Keys && next != PanelKind.Keys) LeaveEditMode();
+        State.IsContextMenuOpen = false;
         State.ActivePanel = next;
         if (next != PanelKind.Macro) { State.IsPicking = false; StopRecording(); }
         ReleaseAllKeys();
@@ -315,13 +316,14 @@ public partial class MainWindowViewModel : ObservableObject
             var tap = new KeyBinding { KeyName = "?", X = x, Y = y };
             KeyBindings.Add(tap);
             Select(tap);
-            BeginRebind("key"); // MuMu gibi: yerleştirince hemen tuşa bas
+            BeginRebindForSelected(); // MuMu gibi: yerleştirince hemen tuşa bas
         }
         else
         {
             var joy = JoystickGroup.FromPreset(tool, x, y, Math.Max(60, DeviceHeight * 0.1));
             JoystickGroups.Add(joy);
             Select(joy);
+            BeginRebindForSelected();
         }
     }
 
@@ -329,18 +331,63 @@ public partial class MainWindowViewModel : ObservableObject
     private void AddFromContextMenu(string tool) => PlaceTool(tool, State.ContextDeviceX, State.ContextDeviceY);
 
     [RelayCommand]
+    private void ResizeJoystick(string delta)
+    {
+        if (SelectedJoystick is { } j && double.TryParse(delta, out var d))
+            j.Radius = Math.Clamp(j.Radius + d, 40, 260);
+    }
+
+    [RelayCommand]
     private void BeginRebind(string slot)
     {
         if (!HasSelection) return;
+        State.IsContextMenuOpen = false;
+        _rebindQueue.Clear();
+        StartSlot(slot);
+    }
+
+    /// <summary>Seçili öğe için atama başlatır: tuşta tek tuş, joystickte sırayla ↑ ← ↓ →.</summary>
+    public void BeginRebindForSelected()
+    {
+        if (SelectedTap is not null) BeginRebind("key");
+        else if (SelectedJoystick is not null)
+        {
+            State.IsContextMenuOpen = false;
+            _rebindQueue.Clear();
+            foreach (var n in new[] { "left", "down", "right" }) _rebindQueue.Enqueue(n);
+            StartSlot("up");
+        }
+    }
+
+    private readonly System.Collections.Generic.Queue<string> _rebindQueue = new();
+
+    private static string SlotName(string slot) => slot switch
+    {
+        "up" => "↑ Yukarı", "left" => "← Sol", "down" => "↓ Aşağı", "right" => "→ Sağ", _ => "tuş"
+    };
+
+    private void StartSlot(string slot)
+    {
         _rebindSlot = slot;
-        State.RebindHint = "Atamak için bir tuşa basın  (Esc: iptal)";
+        State.RebindHint = $"{SlotName(slot)} için bir tuşa basın  (Esc: iptal)";
     }
 
     private void CompleteRebind(string key)
     {
         var slot = _rebindSlot;
+        var rest = _rebindQueue.ToArray();
         CancelRebind();
         if (key == "Escape" || slot is null) return;
+        ApplySlot(slot, key);
+        if (rest.Length > 0)
+        {
+            foreach (var r in rest[1..]) _rebindQueue.Enqueue(r);
+            StartSlot(rest[0]);
+        }
+    }
+
+    private void ApplySlot(string slot, string key)
+    {
 
         switch (slot)
         {
@@ -354,6 +401,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void CancelRebind()
     {
+        _rebindQueue.Clear();
         _rebindSlot = null;
         State.RebindHint = null;
     }
@@ -361,6 +409,7 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void DeleteSelected()
     {
+        State.IsContextMenuOpen = false;
         if (SelectedTap is not null) KeyBindings.Remove(SelectedTap);
         else if (SelectedJoystick is not null) JoystickGroups.Remove(SelectedJoystick);
         Select(null);
