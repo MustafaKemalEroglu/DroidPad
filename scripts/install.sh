@@ -4,7 +4,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 BIN_DIR="${HOME}/.local/bin"
-APP_DIR="${HOME}/.local/share/droidpad"
+APP_DIR="${HOME}/.local/share/droidpad"   # eski çok dosyalı kurulum (temizlenir)
 DESKTOP_DIR="${HOME}/.local/share/applications"
 
 missing=0
@@ -20,18 +20,18 @@ if [ "$missing" -eq 1 ]; then
 fi
 
 echo "→ Yayınlanıyor..."
-rm -rf "$APP_DIR"
-dotnet publish DroidPad.csproj -c Release -r linux-x64 -o "$APP_DIR" >/dev/null
+dotnet publish DroidPad.csproj -c Release -r linux-x64 >/dev/null
 
 mkdir -p "$BIN_DIR" "$DESKTOP_DIR"
-ln -sf "$APP_DIR/DroidPad" "$BIN_DIR/droidpad"
+rm -rf "$APP_DIR"
+install -m 755 bin/Release/net10.0/linux-x64/publish/DroidPad "$BIN_DIR/droidpad"
 
 cat > "$DESKTOP_DIR/droidpad.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=DroidPad
 Comment=Waydroid için tuş eşleme ve makro aracı
-Exec=$APP_DIR/DroidPad
+Exec=$BIN_DIR/droidpad
 Terminal=false
 Categories=Utility;Game;
 DESKTOP

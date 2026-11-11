@@ -10,14 +10,14 @@ Arayüz MuMu Player'ın tuş eşleme ve makro panellerinden esinlenmiştir.
 - .NET 10 SDK (derlemek için)
 
 ## Kurulum
-Yayınlar, `~/.local/bin/droidpad` ve uygulama menüsü girdisini ekler:
+Yayınlar, `~/.local/bin/droidpad` olarak kurar ve uygulama menüsü girdisini ekler:
 ```bash
 ./scripts/install.sh
 ```
 
-Tek dosyalık çıktı üretmek için (çalışma zamanı dahil, .NET kurulumu gerekmez; çıktı `./publish/DroidPad`):
+Tek dosyalık çıktı üretmek için (çalışma zamanı dahil, .NET kurulumu gerekmez; çıktı `bin/Release/net10.0/linux-x64/publish/DroidPad`):
 ```bash
-dotnet publish DroidPad.csproj -c Release -r linux-x64 -o publish
+dotnet publish DroidPad.csproj -c Release -r linux-x64
 ```
 
 Geliştirme için:
