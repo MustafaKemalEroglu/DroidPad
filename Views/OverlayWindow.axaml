@@ -127,6 +127,12 @@
             <Border Background="#E62B6CB0" IsVisible="{Binding State.IsTyping}" Padding="14,7" CornerRadius="8">
                 <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" Text="⌨ Yazma modu — oyun tuşları kapalı  (Enter: gönder, Esc: çık)"/>
             </Border>
+            <Border Background="#E6B7791F" IsVisible="{Binding IsCountdownPaused}" Padding="14,7" CornerRadius="8">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" Text="⏸ Makro durdu, geri sayım sürüyor"/>
+                    <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" Text="{Binding RemainingText}"/>
+                </StackPanel>
+            </Border>
             <Border Background="#E61F9D5B" IsVisible="{Binding State.IsRunning}" Padding="14,7" CornerRadius="8">
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <TextBlock Foreground="White" FontWeight="Bold" FontSize="13" Text="▶ Makro çalışıyor  (F9: durdur)"/>
@@ -183,7 +189,11 @@
                 <TextBlock Classes="section" Text="PROFİL"/>
                 <TextBlock Classes="hint" Text="{Binding ActiveProfileName, StringFormat='Aktif: {0}'}"/>
                 <Button Content="Bu uygulama için kaydet" Command="{Binding SaveForCurrentAppCommand}"/>
-                <ComboBox ItemsSource="{Binding ProfileNames}" SelectedItem="{Binding SelectedProfileName}" HorizontalAlignment="Stretch"/>
+                <ComboBox ItemsSource="{Binding ProfileNames}" SelectedItem="{Binding SelectedProfileName}" HorizontalAlignment="Stretch" PlaceholderText="Profil seçin">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}"/></DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
                 <UniformGrid Columns="2">
                     <Button Margin="2" Content="Yükle" Command="{Binding LoadSelectedProfileCommand}"/>
                     <Button Margin="2" Classes="danger" Content="Sil" Command="{Binding DeleteSelectedProfileCommand}"/>
@@ -217,50 +227,77 @@
                                     Classes.danger="{Binding State.IsRecording}" Command="{Binding ToggleRecordingCommand}"/>
                         </Grid>
 
-                        <CheckBox Content="Süre sınırı (dolunca makro durur)" IsChecked="{Binding EnableCountdown}"/>
-                        <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding EnableCountdown}">
-                            <NumericUpDown Width="86" Minimum="0" Maximum="99" FormatString="0" ShowButtonSpinner="False" Value="{Binding CdHours}" PlaceholderText="sa"/>
-                            <NumericUpDown Width="86" Minimum="0" Maximum="59" FormatString="0" ShowButtonSpinner="False" Value="{Binding CdMinutes}" PlaceholderText="dk"/>
-                            <NumericUpDown Width="86" Minimum="0" Maximum="59" FormatString="0" ShowButtonSpinner="False" Value="{Binding CdSeconds}" PlaceholderText="sn"/>
-                        </StackPanel>
+                        <!-- Süre sınırı -->
+                        <Border Classes="card">
+                            <StackPanel Spacing="6">
+                                <CheckBox Content="Süre sınırı (dolunca makro durur)" IsChecked="{Binding EnableCountdown}"/>
+                                <StackPanel IsVisible="{Binding EnableCountdown}" Spacing="6">
+                                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4">
+                                        <NumericUpDown Minimum="0" Maximum="99" FormatString="0" ShowButtonSpinner="False" Value="{Binding CdHours}" PlaceholderText="sa"/>
+                                        <NumericUpDown Grid.Column="1" Minimum="0" Maximum="59" FormatString="0" ShowButtonSpinner="False" Value="{Binding CdMinutes}" PlaceholderText="dk"/>
+                                        <NumericUpDown Grid.Column="2" Minimum="0" Maximum="59" FormatString="0" ShowButtonSpinner="False" Value="{Binding CdSeconds}" PlaceholderText="sn"/>
+                                    </Grid>
+                                    <CheckBox Content="Makro durunca geri sayım devam etsin" IsChecked="{Binding KeepCountdownAfterMacro}"
+                                              ToolTip.Tip="Elle durdursanız ya da makro bitse bile süre sürer; yeniden başlatınca kalan süreden devam eder. Makro sona erse bile süre dolana ya da elle durdurana kadar sayım sürer"/>
+                                    <Button Content="✕ Sürmekte olan geri sayımı iptal et" Command="{Binding CancelCountdownCommand}"
+                                            IsVisible="{Binding IsCountdownPaused}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
+                        <!-- Makro seçimi -->
                         <TextBlock Classes="section" Text="MAKROLAR"/>
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
-                            <ComboBox ItemsSource="{Binding Macros}" SelectedItem="{Binding SelectedMacro}" HorizontalAlignment="Stretch"
-                                      IsEnabled="{Binding !IsRunning}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate x:DataType="m:Macro"><TextBlock Text="{Binding Name}"/></DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                            <Button Grid.Column="1" Classes="primary" Content="＋ Yeni" Command="{Binding AddMacroCommand}"/>
-                        </Grid>
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
-                            <TextBox Text="{Binding MacroNameEdit}" PlaceholderText="makro adı"/>
-                            <Button Grid.Column="1" Content="Adlandır" Command="{Binding RenameMacroCommand}"/>
-                        </Grid>
-                        <UniformGrid Columns="2">
-                            <Button Margin="2" Content="⧉ Çoğalt" Command="{Binding DuplicateMacroCommand}"/>
-                            <Button Margin="2" Classes="danger" Content="Makroyu sil" Command="{Binding RemoveMacroCommand}"/>
-                        </UniformGrid>
+                        <Border Classes="card">
+                            <StackPanel Spacing="6">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="4">
+                                    <ComboBox ItemsSource="{Binding Macros}" SelectedItem="{Binding SelectedMacro}" HorizontalAlignment="Stretch"
+                                              IsEnabled="{Binding !IsRunning}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="m:Macro"><TextBlock Text="{Binding Name}"/></DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <Button Grid.Column="1" Classes="primary icon" Content="＋" ToolTip.Tip="Yeni makro" Command="{Binding AddMacroCommand}"/>
+                                    <Button Grid.Column="2" Classes="icon" Content="⧉" ToolTip.Tip="Makroyu çoğalt" Command="{Binding DuplicateMacroCommand}"/>
+                                    <Button Grid.Column="3" Classes="danger icon" Content="🗑" ToolTip.Tip="Makroyu sil" Command="{Binding RemoveMacroCommand}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                                    <TextBox Text="{Binding MacroNameEdit}" PlaceholderText="makro adı (Enter: kaydet)">
+                                        <TextBox.KeyBindings>
+                                            <KeyBinding Gesture="Enter" Command="{Binding RenameMacroCommand}"/>
+                                        </TextBox.KeyBindings>
+                                    </TextBox>
+                                    <Button Grid.Column="1" Classes="icon" Content="✎" ToolTip.Tip="Yeniden adlandır" Command="{Binding RenameMacroCommand}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
 
-                        <TextBlock Classes="section" Text="KOMUTLAR"/>
-                        <ListBox ItemsSource="{Binding Commands}" SelectedItem="{Binding SelectedCommand}" MinHeight="90" MaxHeight="190">
+                        <!-- Komutlar -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Classes="section" Text="KOMUTLAR" VerticalAlignment="Bottom"/>
+                            <TextBlock Grid.Column="1" Classes="hint" VerticalAlignment="Bottom" Text="{Binding Commands.Count, StringFormat='{}{0} komut'}"/>
+                        </Grid>
+                        <ListBox ItemsSource="{Binding Commands}" SelectedItem="{Binding SelectedCommand}" MinHeight="90" MaxHeight="220">
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="m:MacroCommand">
-                                    <TextBlock Text="{Binding Description}" FontFamily="monospace" FontSize="12"/>
+                                    <TextBlock Text="{Binding Description}" FontFamily="monospace" FontSize="12" TextTrimming="CharacterEllipsis"/>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
-                        <UniformGrid Columns="4">
-                            <Button Margin="2" Content="↑" Command="{Binding MoveCommandUpCommand}"/>
-                            <Button Margin="2" Content="↓" Command="{Binding MoveCommandDownCommand}"/>
-                            <Button Margin="2" Classes="danger" Content="✕" Command="{Binding RemoveCommandCommand}"/>
-                            <Button Margin="2" Content="Temizle" Command="{Binding ClearCommandsCommand}"/>
-                        </UniformGrid>
+                        <Grid ColumnDefinitions="*,*,*,2*" ColumnSpacing="4">
+                            <Button Classes="icon" Content="↑" ToolTip.Tip="Yukarı taşı" Command="{Binding MoveCommandUpCommand}"/>
+                            <Button Grid.Column="1" Classes="icon" Content="↓" ToolTip.Tip="Aşağı taşı" Command="{Binding MoveCommandDownCommand}"/>
+                            <Button Grid.Column="2" Classes="danger icon" Content="✕" ToolTip.Tip="Seçili komutu sil" Command="{Binding RemoveCommandCommand}"/>
+                            <Button Grid.Column="3" Content="Tümünü temizle" Command="{Binding ClearCommandsCommand}"/>
+                        </Grid>
 
+                        <TextBlock Classes="hint" Text="Yeni komut, seçili komutun ardına eklenir."/>
                         <Grid ColumnDefinitions="100,*,Auto" ColumnSpacing="4">
                             <ComboBox ItemsSource="{Binding CmdTypes}" SelectedItem="{Binding CmdType}" HorizontalAlignment="Stretch"/>
-                            <TextBox Grid.Column="1" Text="{Binding CmdValue}"/>
+                            <TextBox Grid.Column="1" Text="{Binding CmdValue}">
+                                <TextBox.KeyBindings>
+                                    <KeyBinding Gesture="Enter" Command="{Binding AddCommandCommand}"/>
+                                </TextBox.KeyBindings>
+                            </TextBox>
                             <Button Grid.Column="2" Classes="primary" Content="Ekle" Command="{Binding AddCommandCommand}"/>
                         </Grid>
 
@@ -321,6 +358,11 @@
                 <Button Classes="side" Content="▶" ToolTip.Tip="Makro (F11)"
                         Classes.active="{Binding State.IsMacroPanel}"
                         Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:PanelKind.Macro}"/>
+                <Button Classes="side" Content="⋯"
+                        ToolTip.Tip="Diğer araçları göster / gizle"
+                        Classes.active="{Binding State.ShowMoreTools}"
+                        Command="{Binding ToggleMoreToolsCommand}"/>
+                <StackPanel Spacing="6" IsVisible="{Binding State.ShowMoreTools}">
                 <Button Classes="side" Content="☰" ToolTip.Tip="Günlük (F10)"
                         Classes.active="{Binding State.IsLogPanel}"
                         Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:PanelKind.Log}"/>
@@ -332,9 +374,10 @@
                 <Button Classes="side" Content="🔉" ToolTip.Tip="Sesi azalt" Command="{Binding NavKeyCommand}" CommandParameter="KEYCODE_VOLUME_DOWN"/>
                 <Button Classes="side" Content="📷" ToolTip.Tip="Ekran görüntüsü (~/Pictures/DroidPad)" Command="{Binding ScreenshotCommand}"/>
                 <Button Classes="side" Content="📦" ToolTip.Tip="APK kur" Click="OnInstallApkClick"/>
-                <Border Height="1" Background="#2A2E37" Margin="4,2"/>
                 <Ellipse Classes="conn" Width="9" Height="9" HorizontalAlignment="Center" Classes.on="{Binding IsAdbConnected}"
                          ToolTip.Tip="{Binding ConnectionText}"/>
+                </StackPanel>
+                <Border Height="1" Background="#2A2E37" Margin="4,2"/>
                 <Button Classes="side" Content="✕" ToolTip.Tip="Çıkış" Click="OnExitClick"/>
             </StackPanel>
         </Border>

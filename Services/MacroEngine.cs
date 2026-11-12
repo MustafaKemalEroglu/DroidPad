@@ -11,7 +11,8 @@ public sealed class MacroEngine
 {
     private const int SwipeMs = 300;
 
-    public async Task RunAsync(
+    /// <returns>Makro sonuna kadar çalıştıysa true; başlatılamadıysa false.</returns>
+    public async Task<bool> RunAsync(
         IReadOnlyList<MacroCommand> source,
         IReadOnlyDictionary<string, Coordinate> coordinates,
         CancellationToken ct)
@@ -19,11 +20,11 @@ public sealed class MacroEngine
         if (!await AdbService.EnsureConnectedAsync())
         {
             LogService.Error("Makro başlatılamadı: ADB bağlantısı yok.");
-            return;
+            return false;
         }
 
         var commands = Normalize(source);
-        if (!Validate(commands, coordinates)) return;
+        if (!Validate(commands, coordinates)) return false;
 
         var loopStart = MatchLoops(commands);
         var remaining = new Dictionary<int, int>();
@@ -102,6 +103,7 @@ public sealed class MacroEngine
         }
 
         LogService.Success("Makro tamamlandı.");
+        return true;
     }
 
     /// <summary>Eşleşmeyen LOOP START'lar için sona örtük LOOP END ekler.</summary>

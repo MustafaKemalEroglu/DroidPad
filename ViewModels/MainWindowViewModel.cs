@@ -56,12 +56,14 @@ public partial class MainWindowViewModel : ObservableObject
 
     // Geri sayım (süre sınırı)
     [ObservableProperty] private bool _enableCountdown;
+    [ObservableProperty] private bool _keepCountdownAfterMacro;
     [ObservableProperty] private decimal? _cdHours = 0;
     [ObservableProperty] private decimal? _cdMinutes = 30;
     [ObservableProperty] private decimal? _cdSeconds = 0;
 
     public bool IsRunning => _automation.IsRunning;
     public string RemainingText => _automation.RemainingText;
+    public bool IsCountdownPaused => _automation.IsCountdownPaused;
     public bool IsTapSelected => SelectedTap is not null;
     public bool IsJoystickSelected => SelectedJoystick is not null;
     public bool HasSelection => IsTapSelected || IsJoystickSelected;
@@ -101,6 +103,10 @@ public partial class MainWindowViewModel : ObservableObject
             State.IsRunning = _automation.IsRunning;
             OnPropertyChanged(nameof(IsRunning));
         }
+        else if (e.PropertyName == nameof(AutomationService.IsCountdownPaused))
+        {
+            OnPropertyChanged(nameof(IsCountdownPaused));
+        }
         else if (e.PropertyName == nameof(AutomationService.RemainingText))
         {
             OnPropertyChanged(nameof(RemainingText));
@@ -121,8 +127,12 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void RefreshProfileNames()
     {
+        var keep = SelectedProfileName;
         ProfileNames.Clear();
         foreach (var n in ProfileService.List()) ProfileNames.Add(n);
+        // Clear() seçimi sıfırlar; önceki (yoksa aktif) profili yeniden seç
+        SelectedProfileName = keep is not null && ProfileNames.Contains(keep) ? keep
+            : ProfileNames.Contains(ActiveProfileName) ? ActiveProfileName : null;
     }
 
     /// <summary>Waydroid'de ön plandaki uygulamayı izler; o uygulamaya ait profil varsa otomatik yükler.</summary>
@@ -173,6 +183,7 @@ public partial class MainWindowViewModel : ObservableObject
         await SaveProfileAsync(ProfileService.PathFor(ActiveProfileName), silent: true);
         await SaveProfileAsync(ProfileService.PathFor(pkg));
         ActiveProfileName = pkg;
+        SelectedProfileName = pkg;
         RefreshProfileNames();
     }
 
@@ -748,7 +759,9 @@ public partial class MainWindowViewModel : ObservableObject
         };
 
         if (cmd is null) { LogService.Warning($"'{CmdType}' için geçersiz değer: '{v}'"); return; }
-        Commands.Add(cmd);
+        // Seçili komutun ardına ekle; seçim yoksa sona
+        var at = SelectedCommand is null ? -1 : Commands.IndexOf(SelectedCommand);
+        if (at >= 0) Commands.Insert(at + 1, cmd); else Commands.Add(cmd);
         SelectedCommand = cmd;
     }
 
@@ -824,10 +837,12 @@ public partial class MainWindowViewModel : ObservableObject
 
         var coords = Coordinates.ToDictionary(c => c.Name);
         if (SelectedMacro is { } macro) LogService.Info($"Makro: {macro.Name}");
-        await _automation.StartAsync(Commands.ToList(), coords, seconds);
+        await _automation.StartAsync(Commands.ToList(), coords, seconds, KeepCountdownAfterMacro);
     }
 
+    [RelayCommand] private void ToggleMoreTools() => State.ShowMoreTools = !State.ShowMoreTools;
     [RelayCommand] private void Stop() => _automation.Stop();
+    [RelayCommand] private void CancelCountdown() => _automation.CancelCountdown();
 
     private void ToggleRun()
     {

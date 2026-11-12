@@ -13,6 +13,9 @@ public partial class EditorState : ObservableObject
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ItemsVisible))] private bool _showKeys = true;
 
+    /// <summary>Kenar çubuğunda günlük, gezinme ve araç butonları (varsayılan gizli).</summary>
+    [ObservableProperty] private bool _showMoreTools;
+
     [ObservableProperty] private bool _isContextMenuOpen;
     [ObservableProperty] private double _contextMenuX;
     [ObservableProperty] private double _contextMenuY;

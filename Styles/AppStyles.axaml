@@ -52,6 +52,16 @@
     <Style Selector="Button.tool"><Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Padding" Value="10,8"/></Style>
     <Style Selector="Button.tool.active /template/ ContentPresenter"><Setter Property="Background" Value="#2F6FED"/><Setter Property="Foreground" Value="White"/></Style>
 
+    <Style Selector="Button.icon"><Setter Property="MinWidth" Value="34"/><Setter Property="HorizontalAlignment" Value="Stretch"/></Style>
+    <Style Selector="Border.card">
+        <Setter Property="Background" Value="#1D2027"/>
+        <Setter Property="BorderBrush" Value="#2A2E37"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="8"/>
+    </Style>
+    <Style Selector="ComboBoxItem"><Setter Property="Foreground" Value="#E8EAF0"/><Setter Property="FontSize" Value="12"/></Style>
+
     <Style Selector="ListBox">
         <Setter Property="Background" Value="#14171C"/>
         <Setter Property="BorderBrush" Value="#2A2E37"/>
