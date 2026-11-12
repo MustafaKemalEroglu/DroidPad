@@ -1,0 +1,6 @@
+{
+  "uuid": "droidpad-follow@droidpad",
+  "name": "DroidPad Follow",
+  "description": "DroidPad kaplamasını Waydroid'in masaüstüne/monitörüne taşır; yalnızca Waydroid ön plandayken onun üstünde tutar.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"]
+}

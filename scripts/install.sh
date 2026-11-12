@@ -36,4 +36,13 @@ Terminal=false
 Categories=Utility;Game;
 DESKTOP
 
+# GNOME Shell eklentisi: kaplamayı Waydroid'in masaüstüne taşır, yalnızca Waydroid ön plandayken üstte tutar
+if command -v gnome-extensions >/dev/null 2>&1; then
+  EXT="droidpad-follow@droidpad"
+  mkdir -p "${HOME}/.local/share/gnome-shell/extensions/$EXT"
+  cp Extension/$EXT/* "${HOME}/.local/share/gnome-shell/extensions/$EXT/"
+  gnome-extensions enable "$EXT" 2>/dev/null || true
+  echo "→ GNOME eklentisi kuruldu (ilk kurulumda oturumu kapatıp açın)."
+fi
+
 echo "✓ Kuruldu. Çalıştırmak için: droidpad  (veya uygulama menüsünden DroidPad)"

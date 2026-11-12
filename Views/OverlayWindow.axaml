@@ -10,8 +10,7 @@
         TransparencyLevelHint="Transparent"
         WindowDecorations="None"
         ExtendClientAreaToDecorationsHint="True"
-        Topmost="True"
-        WindowState="Maximized">
+        WindowState="Normal">
 
     <Grid x:Name="Root" Background="Transparent">
 

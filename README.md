@@ -35,6 +35,9 @@ Geliştirme için:
 dotnet run --project DroidPad.csproj
 ```
 
+## GNOME Shell eklentisi (Wayland)
+Kaplamanın Waydroid'i takip etmesi için `Extension/droidpad-follow@droidpad` eklentisi gerekir (`install.sh` kurar; sonrasında oturumu kapatıp açın). Kaplama Waydroid penceresinin konum ve boyutuna uyar, Waydroid hangi masaüstüne taşınırsa oraya gider ve yalnızca Waydroid ön plandayken onun üstünde durur; başka uygulama öne geçince arkada kalır.
+
 ## Kullanım
 Waydroid'i **tam ekran** açın (`waydroid show-full-ui`), ardından DroidPad'i başlatın.
 Sağdaki yan çubuk ve kısayollar:
