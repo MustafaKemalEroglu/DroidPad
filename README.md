@@ -83,3 +83,11 @@ açıkken o uygulama öne geldiğinde profil otomatik yüklenir.
   süre keser/geri yükler. Yardımcıyı yeniden derlemek için: `scripts/build-helper.sh` (JDK + internet).
 - **Tam ekran:** katman tüm ekranı Android ekranına eşler; Waydroid pencere modunda hizalanmaz.
 - **Fare ile bakış:** Wayland'de imleç kilitleme ve çoklu dokunuş olmadan uygulanamıyor.
+
+## Sürüm çıkarma
+
+```bash
+scripts/release.sh 0.2.0
+```
+
+Script `DroidPad.csproj` içindeki `<Version>` değerini günceller, commit + `v0.2.0` etiketini atıp push eder; GitHub Actions etiketten sürüm numarasını alıp derler ve Release'e ekler. Her yeni çıktı için **yeni bir sürüm numarası** kullanın.
