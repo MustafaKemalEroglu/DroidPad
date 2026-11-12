@@ -401,6 +401,13 @@ public static partial class AdbService
     }
 
     /// <summary>background=true: (yalnızca "input" yolunda) komut cihazda arka planda koşar, sıradaki komutu beklemez.</summary>
+    /// <summary>Tuşlara aynı anda basar (ör. Ctrl+A). Android 12+ "input keycombination" gerekir.</summary>
+    public static void KeyCombination(params string[] keycodes)
+    {
+        if (keycodes.Any(k => !KeycodeRegex().IsMatch(k))) { LogService.Error("Geçersiz keycode."); return; }
+        Send($"input keycombination {string.Join(' ', keycodes)}");
+    }
+
     public static void Tap(int x, int y, bool background = true, int pointer = PtrMacro)
     {
         if (HasMultiTouch) SendTouch($"t {pointer} {x} {y}");

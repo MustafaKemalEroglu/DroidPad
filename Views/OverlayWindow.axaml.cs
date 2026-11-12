@@ -46,6 +46,7 @@ public partial class OverlayWindow : Window
         AddHandler(PointerPressedEvent, OnWindowRightPressed, RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel); // Tab vb. odak tuşlarını kontrollerden önce yakala
         AddHandler(KeyUpEvent, OnWindowKeyUp, RoutingStrategies.Tunnel);
+        AddHandler(TextInputEvent, (_, e) => Vm?.OnTextInput(e.Text), RoutingStrategies.Tunnel);
         Activated += (_, _) => { if (Vm is { } v) v.WindowActive = true; };
         Deactivated += (_, _) =>
         {
@@ -278,7 +279,8 @@ public partial class OverlayWindow : Window
             return;
         }
 
-        if (vm.HandleKeyDown(KeyNames.Name(e.Key), typing, e.KeyModifiers.HasFlag(KeyModifiers.Control) ? null : e.KeySymbol)) e.Handled = true;
+        if (vm.HandleKeyDown(KeyNames.Name(e.Key), typing, e.KeyModifiers.HasFlag(KeyModifiers.Control) ? null : e.KeySymbol,
+                e.KeyModifiers.HasFlag(KeyModifiers.Control), e.KeyModifiers.HasFlag(KeyModifiers.Shift), e.PhysicalKey.ToString())) e.Handled = true;
     }
 
     private void OnWindowKeyUp(object? sender, KeyEventArgs e)

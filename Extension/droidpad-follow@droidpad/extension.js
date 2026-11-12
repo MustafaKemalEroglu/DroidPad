@@ -12,6 +12,7 @@ export default class DroidPadFollow extends Extension {
         this._tracked = new Map(); // Meta.Window -> sinyal kimlikleri
         this._syncId = 0;
         this._padSeen = false;
+        this._prev = null; // kaplama dışında en son odaklanan pencere
 
         this._displayIds = [
             global.display.connect('notify::focus-window', () => this._sync(false)),
@@ -65,17 +66,45 @@ export default class DroidPadFollow extends Extension {
         if (pad && waydroid === w && pad.get_workspace() === w.get_workspace()) this._fit(pad, w);
     }
 
+    // Waydroid'in ekranda GERÇEKTEN kapladığı alan. Düşük çözünürlükte pencere çerçevesi
+    // küçük raporlanabilir ama görüntü ekranı kaplayacak şekilde ölçeklenir; bu yüzden
+    // çerçeve ile görüntü (actor) alanının büyüğü alınır.
+    _visualRect(w) {
+        const f = w.get_frame_rect();
+        let r = {x: f.x, y: f.y, width: f.width, height: f.height};
+        const a = w.get_compositor_private();
+        if (a) {
+            const [x, y] = a.get_transformed_position();
+            const [aw, ah] = a.get_transformed_size();
+            if (aw * ah > r.width * r.height)
+                r = {x: Math.round(x), y: Math.round(y), width: Math.round(aw), height: Math.round(ah)};
+        }
+        return r;
+    }
+
+    // GNOME 49+ get_maximized/MaximizeFlags'i kaldırdı (is_maximized/unmaximize()); eski sürümleri de destekle.
+    _isMax(w) {
+        return typeof w.is_maximized === 'function' ? w.is_maximized() : w.get_maximized() !== 0;
+    }
+
+    _unmax(w) {
+        try { w.unmaximize(); } catch (_e) { w.unmaximize(Meta.MaximizeFlags.BOTH); }
+    }
+
+    _coversMonitor(w, r) {
+        const m = global.display.get_monitor_geometry(w.get_monitor());
+        return r.width >= m.width - 2 && r.height >= m.height - 2;
+    }
+
     // Kaplamayı Waydroid penceresinin konum ve boyutuna eşitler.
     _fit(pad, wd) {
-        if (wd.is_fullscreen()) {
+        const r = this._visualRect(wd);
+        if (wd.is_fullscreen() || this._coversMonitor(wd, r)) {
             if (!pad.is_fullscreen()) pad.make_fullscreen();
             return;
         }
         if (pad.is_fullscreen()) pad.unmake_fullscreen();
-        if (pad.get_maximized()) {
-            try { pad.unmaximize(Meta.MaximizeFlags.BOTH); } catch (_e) { pad.unmaximize(); }
-        }
-        const r = wd.get_frame_rect();
+        if (this._isMax(pad)) this._unmax(pad);
         const c = pad.get_frame_rect();
         if (r.x !== c.x || r.y !== c.y || r.width !== c.width || r.height !== c.height)
             pad.move_resize_frame(false, r.x, r.y, r.width, r.height);
@@ -120,8 +149,20 @@ export default class DroidPadFollow extends Extension {
         if (follow && global.workspace_manager.get_active_workspace() !== ws)
             ws.activate(global.get_current_time());
 
-        // Yalnızca Waydroid (veya kaplamanın kendisi) odaktayken öne çık.
-        if (firstTime || follow || focus === waydroid || focus === pad)
+        if (focus && focus !== pad) this._prev = focus;
+
+        // Kaplama yalnızca Waydroid ön plandayken (veya ondan geçilen kaplamaya odaklanılmışsa) öne çıkar.
+        const allowed = firstTime || follow || focus === waydroid ||
+            (focus === pad && this._prev === waydroid);
+        if (allowed) {
             pad.raise();
+        } else if (focus === pad) {
+            // Başka uygulama ön plandayken kaplamaya odaklanılsa bile öne çıkmasın:
+            // arkaya at, odağı önceki uygulamaya geri ver.
+            pad.lower();
+            const prev = this._prev;
+            if (prev && prev !== pad && this._tracked.has(prev))
+                prev.activate(global.get_current_time());
+        }
     }
 }

@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -266,7 +267,7 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>Klavye girdisi. true dönerse olay işlenmiş sayılır.</summary>
-    public bool HandleKeyDown(string key, bool typing, string? symbol = null)
+    public bool HandleKeyDown(string key, bool typing, string? symbol = null, bool ctrl = false, bool shift = false, string? physical = null)
     {
         switch (key)
         {
@@ -279,7 +280,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
         if (typing) return false;
 
-        if (State.IsTyping) { HandleTypingKey(key, symbol); return true; }
+        if (State.IsTyping) { HandleTypingKey(key, symbol, ctrl, shift, physical); return true; }
 
         if (State.IsWaitingForKey) { CompleteRebind(key); return true; }
 
@@ -345,8 +346,10 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    private void HandleTypingKey(string key, string? symbol)
+    private void HandleTypingKey(string key, string? symbol, bool ctrl, bool shift, string? physical)
     {
+        if (key is "LeftShift" or "RightShift" or "LeftCtrl" or "RightCtrl" or "LeftAlt" or "RightAlt" or "LWin" or "RWin") return;
+        _symbolSent = false;
         switch (key)
         {
             case "Escape":
@@ -357,12 +360,70 @@ public partial class MainWindowViewModel : ObservableObject
                 AdbService.KeyEvent("KEYCODE_ENTER", background: false);
                 SetManualTyping(false);
                 return;
-            case "Back": AdbService.KeyEvent("KEYCODE_DEL", background: false); return;
-            case "Delete": AdbService.KeyEvent("KEYCODE_FORWARD_DEL", background: false); return;
-            case "Left": AdbService.KeyEvent("KEYCODE_DPAD_LEFT", background: false); return;
-            case "Right": AdbService.KeyEvent("KEYCODE_DPAD_RIGHT", background: false); return;
         }
-        if (!string.IsNullOrEmpty(symbol) && !char.IsControl(symbol[0])) AdbService.Text(symbol);
+
+        // Gezinme/silme tuşları: Ctrl ve Shift ile birleşince tek kombinasyon olarak gider
+        // (Ctrl+←/→ kelime atlama, Ctrl+Shift+←/→ kelime seçme, Shift+←/→ seçme, Ctrl+Backspace kelime silme...).
+        var nav = key switch
+        {
+            "Back" => "KEYCODE_DEL",
+            "Delete" => "KEYCODE_FORWARD_DEL",
+            "Left" => "KEYCODE_DPAD_LEFT",
+            "Right" => "KEYCODE_DPAD_RIGHT",
+            "Up" => "KEYCODE_DPAD_UP",
+            "Down" => "KEYCODE_DPAD_DOWN",
+            "Home" => "KEYCODE_MOVE_HOME",
+            "End" => "KEYCODE_MOVE_END",
+            "Prior" or "PageUp" => "KEYCODE_PAGE_UP",
+            "Next" or "PageDown" => "KEYCODE_PAGE_DOWN",
+            _ => null
+        };
+        if (nav is not null)
+        {
+            if (!ctrl && !shift) { AdbService.KeyEvent(nav, background: false); return; }
+            var keys = new List<string>();
+            if (ctrl) keys.Add("KEYCODE_CTRL_LEFT");
+            if (shift) keys.Add("KEYCODE_SHIFT_LEFT");
+            keys.Add(nav);
+            AdbService.KeyCombination(keys.ToArray());
+            return;
+        }
+
+        // Ctrl+A/C/V/X/Z/Y (Ctrl+Shift+Z yinele): tümünü seç, kopyala, yapıştır...
+        if (ctrl)
+        {
+            if (key.Length == 1 && key[0] is >= 'A' and <= 'Z' && "ACVXZY".Contains(key[0]))
+                AdbService.KeyCombination(shift
+                    ? new[] { "KEYCODE_CTRL_LEFT", "KEYCODE_SHIFT_LEFT", $"KEYCODE_{key}" }
+                    : new[] { "KEYCODE_CTRL_LEFT", $"KEYCODE_{key}" });
+            return;
+        }
+        if (!string.IsNullOrEmpty(symbol) && !char.IsControl(symbol[0])) { AdbService.Text(symbol); _symbolSent = true; return; }
+
+        // Shift'li karakter KeySymbol ile gelmediyse önce TextInput beklenir (IME düzene uygun karakteri verir);
+        // gelmezse fiziksel tuş + etkin düzenden çıkarılır.
+        if (shift && physical is not null)
+        {
+            _awaitingText = true;
+            DispatcherTimer.RunOnce(() =>
+            {
+                if (!_awaitingText) return;
+                _awaitingText = false;
+                if (KeyboardLayout.Shifted(physical) is { } ch) AdbService.Text(ch);
+                else LogService.Warning($"Shift+{key} için karakter alınamadı.");
+            }, TimeSpan.FromMilliseconds(60));
+        }
+    }
+
+    private bool _symbolSent, _awaitingText;
+
+    /// <summary>Platformdan gelen metin girdisi (IME/düzen uyumlu gerçek karakter). Yazma modunda cihaza gönderilir.</summary>
+    public void OnTextInput(string? text)
+    {
+        if (!State.IsTyping || string.IsNullOrEmpty(text) || char.IsControl(text[0])) return;
+        if (_symbolSent) { _symbolSent = false; return; } // KeySymbol ile zaten gönderildi
+        _awaitingText = false;
+        AdbService.Text(text);
     }
 
     public void HandleKeyUp(string key) => _input.KeyUp(key, KeyBindings, JoystickGroups);
