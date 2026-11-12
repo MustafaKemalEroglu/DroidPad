@@ -9,7 +9,17 @@ Arayüz MuMu Player'ın tuş eşleme ve makro panellerinden esinlenmiştir.
 - `adb` (android-tools)
 - .NET 10 SDK (derlemek için)
 
-## Kurulum
+## İndirme (.NET gerekmez)
+Tek dosyalık, .NET çalışma zamanı dahil linux-x64 sürümü:
+**[DroidPad-linux-x64](https://github.com/MustafaKemalEroglu/DroidPad/releases/latest/download/DroidPad-linux-x64)**
+([tüm sürümler](https://github.com/MustafaKemalEroglu/DroidPad/releases))
+```bash
+chmod +x DroidPad-linux-x64
+./DroidPad-linux-x64
+```
+Yalnızca `adb` ve Waydroid gerekir. Doğrulama için sürümde `.sha256` dosyası da bulunur.
+
+## Kurulum (kaynaktan)
 Yayınlar, `~/.local/bin/droidpad` olarak kurar ve uygulama menüsü girdisini ekler:
 ```bash
 ./scripts/install.sh
