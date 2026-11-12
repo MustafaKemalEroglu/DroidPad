@@ -9,7 +9,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <RootNamespace>DroidPad</RootNamespace>
     <AssemblyName>DroidPad</AssemblyName>
-    <Version>0.1.0-alpha.1</Version>
+    <Version>0.1.0-alpha.2</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
