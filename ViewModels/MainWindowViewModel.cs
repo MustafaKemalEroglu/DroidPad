@@ -450,8 +450,8 @@ public partial class MainWindowViewModel : ObservableObject
         var now = Environment.TickCount64;
         if (wheelDelta == 0 || now - _lastScrollTicks < 90) return;
         _lastScrollTicks = now;
-        var dy = (int)(DeviceHeight * 0.18) * Math.Sign(wheelDelta); // tekerlek yukarı → içerik yukarı kayar
-        var y2 = (int)Math.Clamp(y - dy, 0, DeviceHeight - 1);
+        var dy = (int)(DeviceHeight * 0.18) * Math.Sign(wheelDelta); // tekerlek yukarı → parmak aşağı kayar (içerik aşağı iner; masaüstü fare alışkanlığı)
+        var y2 = (int)Math.Clamp(y + dy, 0, DeviceHeight - 1);
         AdbService.Swipe((int)x, (int)y, (int)x, y2, 160);
     }
 
