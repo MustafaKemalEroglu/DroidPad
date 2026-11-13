@@ -322,27 +322,70 @@ public partial class MainWindowViewModel : ObservableObject
         RefreshTyping();
     }
 
+    private bool _nativeTyping;
+
+    /// <summary>Metin kutusu açıkken kaplamaya tıklanınca (odak kaplamaya geçer) klavye yeniden Waydroid'e verilir.</summary>
+    public void OnPadActivated()
+    {
+        if (_nativeTyping) _ = ShellFocus.FocusWaydroidAsync();
+    }
+
     private void RefreshTyping()
     {
         var on = _manualTyping || (_imeShown && !_imeIgnored);
         if (on == State.IsTyping) return;
         if (on) ReleaseAllKeys(); // takılı kalan WASD vb. bırakılsın
         State.IsTyping = on;
+
+        // Metin kutusu (Android klavyesi) açıldıysa klavyeyi Waydroid'e ver: Türkçe karakterler ve tüm kısayollar
+        // Android'e yerel girdi olarak gider. F7 ile elle açılan yazma modu uygulama içinde kalır.
+        if (on && !_manualTyping)
+            _ = Task.Run(async () => { if (await ShellFocus.FocusWaydroidAsync()) _nativeTyping = true; });
+        else if (!on && _nativeTyping)
+        {
+            _nativeTyping = false;
+            _ = ShellFocus.FocusPadAsync();
+        }
     }
 
-    /// <summary>Android ekran klavyesi açıkken (metin kutusu odakta) oyun tuşlarını geçici olarak askıya alır.</summary>
+    private readonly SemaphoreSlim _kbSignal = new(0, 1);
+
+    /// <summary>Dokunma/tıklama gibi klavyeyi açıp kapatabilecek bir eylemden sonra çağrılır: kısa süreli sık kontrol başlatır.</summary>
+    public void NudgeKeyboardCheck()
+    {
+        try { _kbSignal.Release(); } catch (SemaphoreFullException) { /* zaten bekliyor */ }
+    }
+
+    private async Task<bool> CheckKeyboardOnceAsync()
+    {
+        var shown = await Task.Run(AdbService.IsKeyboardShownAsync); // süreç başlatma UI iş parçacığında olmasın
+        if (shown is null) return false;
+        _imeShown = shown.Value;
+        if (!_imeShown) _imeIgnored = false;
+        RefreshTyping();
+        return true;
+    }
+
+    /// <summary>
+    /// Android ekran klavyesi açıkken (metin kutusu odakta) oyun tuşlarını geçici olarak askıya alır.
+    /// Boştayken seyrek (1 sn), yazma sırasında sık (250 ms) kontrol eder; her dokunuştan sonra ise
+    /// kısa aralıklarla birkaç kez bakar. Böylece açılış/kapanış hızlıdır ama sürekli yük bindirmez.
+    /// </summary>
     private async Task WatchKeyboardAsync()
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(1000));
-        while (await timer.WaitForNextTickAsync())
+        while (true)
         {
+            var interval = State.IsTyping || _nativeTyping ? 250 : 1000;
+            var nudged = await _kbSignal.WaitAsync(interval);
             if (!IsAdbConnected) { _imeShown = _imeIgnored = false; RefreshTyping(); continue; }
-            if (!WindowActive) continue;
-            var shown = await Task.Run(AdbService.IsKeyboardShownAsync); // süreç başlatma UI iş parçacığında olmasın
-            if (shown is null) continue;
-            _imeShown = shown.Value;
-            if (!_imeShown) _imeIgnored = false;
-            RefreshTyping();
+            if (!WindowActive && !_nativeTyping) continue; // klavye Waydroid'deyken de kapanışı izle
+            await CheckKeyboardOnceAsync();
+            if (!nudged) continue;
+            foreach (var delay in new[] { 50, 50, 100, 150, 250, 400, 600 })
+            {
+                await Task.Delay(delay);
+                await CheckKeyboardOnceAsync();
+            }
         }
     }
 

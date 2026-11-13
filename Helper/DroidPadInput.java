@@ -1,5 +1,7 @@
 import android.os.SystemClock;
 import android.view.InputDevice;
+import android.view.KeyCharacterMap;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.MotionEvent.PointerCoords;
 import android.view.MotionEvent.PointerProperties;
@@ -16,6 +18,7 @@ import java.lang.reflect.Method;
  *   d ID X Y   işaretçi bas        m ID X Y   işaretçi taşı      u ID   işaretçi bırak
  *   t ID X Y   kısa dokunuş (engellemez)       r   hepsini bırak
  *   p ID X1 Y1 X2 Y2 MS   MS sürede kaydırma (X1,Y1=X2,Y2 ise uzun basma; engellemez)
+ *   x HEX      metin yaz (UTF-16 karakter kodları 4'er haneli onaltılık; ASCII dışı harfler için)
  *   s          "@@" yaz (eşitleme)           q   çık
  */
 public final class DroidPadInput {
@@ -60,11 +63,25 @@ public final class DroidPadInput {
                 gesture(Integer.parseInt(p[1]), f(p[2]), f(p[3]), f(p[4]), f(p[5]), Integer.parseInt(p[6]));
                 break;
             case "r": releaseAll(); break;
+            case "x": typeText(p.length > 1 ? p[1] : ""); break;
             case "s": System.out.println("@@"); System.out.flush(); break;
             case "q": return false;
             default: break;
         }
         return true;
+    }
+
+    /** "input text" yalnızca ASCII yazar; ASCII dışı karakterler (ü ş ç ö ğ ı İ...) ACTION_MULTIPLE tuş olayıyla gider. */
+    private static void typeText(String hex) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i + 4 <= hex.length(); i += 4) sb.append((char) Integer.parseInt(hex.substring(i, i + 4), 16));
+        if (sb.length() == 0) return;
+        KeyEvent ev = new KeyEvent(SystemClock.uptimeMillis(), sb.toString(), KeyCharacterMap.VIRTUAL_KEYBOARD, 0);
+        try {
+            inject.invoke(inputManager, ev, 0);
+        } catch (Throwable t) {
+            System.err.println("metin enjeksiyon hatası: " + t);
+        }
     }
 
     /** Ayrı iş parçacığında: bas → (ara noktalar) → bırak; okuma döngüsü beklemez. */

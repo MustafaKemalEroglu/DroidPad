@@ -47,7 +47,7 @@ public partial class OverlayWindow : Window
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel); // Tab vb. odak tuşlarını kontrollerden önce yakala
         AddHandler(KeyUpEvent, OnWindowKeyUp, RoutingStrategies.Tunnel);
         AddHandler(TextInputEvent, (_, e) => Vm?.OnTextInput(e.Text), RoutingStrategies.Tunnel);
-        Activated += (_, _) => { if (Vm is { } v) v.WindowActive = true; };
+        Activated += (_, _) => { if (Vm is { } v) { v.WindowActive = true; v.OnPadActivated(); } };
         Deactivated += (_, _) =>
         {
             if (Vm is not { } v) return;
@@ -188,6 +188,7 @@ public partial class OverlayWindow : Window
         _touching = false;
         var d = ToDevice(e.GetPosition(Root));
         vm.TouchUp(d.X, d.Y, _touchStart.X, _touchStart.Y);
+        vm.NudgeKeyboardCheck(); // bu dokunuş bir metin kutusu açmış olabilir
         e.Pointer.Capture(null);
         e.Handled = true;
     }

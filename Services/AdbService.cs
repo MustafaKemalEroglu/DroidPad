@@ -321,9 +321,11 @@ public static partial class AdbService
     public static async Task<bool?> IsKeyboardShownAsync()
     {
         if (!IsConnected) return null;
-        var (exit, output) = await RunAsync("adb", $"-s {_device} shell \"dumpsys input_method | grep -E 'mInputShown|mImeWindowVis'\"", 2000);
+        var (exit, output) = await RunAsync("adb", $"-s {_device} shell \"dumpsys input_method | grep -E 'mInputShown|mShowRequested'\"", 2000);
         if (exit != 0 || output.Length == 0) return exit == 0 ? false : null;
-        return output.Contains("mInputShown=true", StringComparison.Ordinal);
+        // mShowRequested: uygulama klavye istediği an true olur (pencere çizilmesinden önce) → daha erken algılanır.
+        return output.Contains("mInputShown=true", StringComparison.Ordinal)
+            || output.Contains("mShowRequested=true", StringComparison.Ordinal);
     }
 
     [GeneratedRegex(@"mCurrentFocus=Window\{\S+ \S+ ([A-Za-z0-9_.]+)/")]
@@ -423,14 +425,23 @@ public static partial class AdbService
     /// <summary>Aynı noktada uzun süre kalan "swipe" uzun basma sayılır.</summary>
     public static void LongPress(int x, int y, int durationMs, int pointer = PtrMacro) => Swipe(x, y, x, y, durationMs, true, pointer);
 
-    /// <summary>"input text" yalnızca ASCII destekler; boşluk %s olur ("%" için kaçış yoktur), kabuk özel karakterleri tırnaklanır.</summary>
+    /// <summary>
+    /// Metin yazar. ASCII karakterler "input text" ile gider (boşluk %s olur, kabuk özel karakterleri tırnaklanır).
+    /// ASCII dışı harfler (ü ş ç ö ğ ı...) "input text" desteklemediği için, varsa cihaz yardımcısıyla gönderilir.
+    /// </summary>
     public static void Text(string text)
     {
         var ascii = new string(text.Where(c => c is >= ' ' and <= '~').ToArray());
-        if (ascii.Length != text.Length) LogService.Warning("Metindeki ASCII olmayan karakterler atlandı.");
-        if (ascii.Length == 0) return;
-        var escaped = ascii.Replace(" ", "%s").Replace("'", "'\\''");
-        Send($"input text '{escaped}'");
+        var other = new string(text.Where(c => c > '~' && !char.IsControl(c)).ToArray());
+
+        if (ascii.Length > 0)
+        {
+            var escaped = ascii.Replace(" ", "%s").Replace("'", "'\\''");
+            Send($"input text '{escaped}'");
+        }
+        if (other.Length == 0) return;
+        if (HasMultiTouch) SendTouch("x " + string.Concat(other.Select(c => ((int)c).ToString("x4"))));
+        else LogService.Warning("Metindeki ASCII olmayan karakterler atlandı (cihaz yardımcısı çalışmıyor).");
     }
 
     /// <param name="background">false: sıralı çalışır (yazma modunda Backspace/Enter, metinle yarışmasın).</param>
