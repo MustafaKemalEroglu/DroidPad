@@ -11,7 +11,7 @@ v="${1:-}"; v="${v#v}"
 git rev-parse "v$v" >/dev/null 2>&1 && { echo "v$v etiketi zaten var."; exit 1; }
 
 sed -i -E "s|<Version>[^<]*</Version>|<Version>$v</Version>|" DroidPad.csproj
-git commit -am "chore: sürüm $v"
+git diff --quiet || git commit -qam "chore: sürüm $v"  # sürüm zaten güncelse commit atlanır
 git tag -a "v$v" -m "v$v"
 git push origin HEAD "v$v"
 echo "v$v gönderildi; Actions sekmesinden derlemeyi izleyin."
