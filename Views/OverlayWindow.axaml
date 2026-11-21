@@ -355,14 +355,14 @@
                         ToolTip.Tip="Diğer araçları göster / gizle"
                         Classes.active="{Binding State.ShowMoreTools}"
                         Command="{Binding ToggleMoreToolsCommand}"/>
+                <Ellipse Classes="conn" Width="13" Height="13" HorizontalAlignment="Center" Classes.on="{Binding IsAdbConnected}"
+                         ToolTip.Tip="{Binding ConnectionText}"/>
                 <Button x:Name="KeysButton" Classes="side" Content="⌨" ToolTip.Tip="Tuş Eşleme (F12)"
                         Classes.active="{Binding State.IsKeysPanel}"
                         Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:PanelKind.Keys}"/>
                 <Button Classes="side" Content="▶" ToolTip.Tip="Makro (F11)"
                         Classes.active="{Binding State.IsMacroPanel}"
                         Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:PanelKind.Macro}"/>
-                <Ellipse Classes="conn" Width="9" Height="9" HorizontalAlignment="Center" Classes.on="{Binding IsAdbConnected}"
-                         ToolTip.Tip="{Binding ConnectionText}"/>
                 <StackPanel Spacing="6" IsVisible="{Binding State.ShowMoreTools}">
                 <Button Classes="side" Content="☰" ToolTip.Tip="Günlük (F10)"
                         Classes.active="{Binding State.IsLogPanel}"
