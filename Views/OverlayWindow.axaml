@@ -351,16 +351,18 @@
         <Border IsVisible="{Binding State.IsNotPicking}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"
                 Background="#F2181A1F" BorderBrush="#2A2E37" BorderThickness="1" CornerRadius="14" Padding="6">
             <StackPanel Spacing="6">
+                <Button Classes="side" Content="⋯"
+                        ToolTip.Tip="Diğer araçları göster / gizle"
+                        Classes.active="{Binding State.ShowMoreTools}"
+                        Command="{Binding ToggleMoreToolsCommand}"/>
                 <Button x:Name="KeysButton" Classes="side" Content="⌨" ToolTip.Tip="Tuş Eşleme (F12)"
                         Classes.active="{Binding State.IsKeysPanel}"
                         Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:PanelKind.Keys}"/>
                 <Button Classes="side" Content="▶" ToolTip.Tip="Makro (F11)"
                         Classes.active="{Binding State.IsMacroPanel}"
                         Command="{Binding ShowPanelCommand}" CommandParameter="{x:Static vm:PanelKind.Macro}"/>
-                <Button Classes="side" Content="⋯"
-                        ToolTip.Tip="Diğer araçları göster / gizle"
-                        Classes.active="{Binding State.ShowMoreTools}"
-                        Command="{Binding ToggleMoreToolsCommand}"/>
+                <Ellipse Classes="conn" Width="9" Height="9" HorizontalAlignment="Center" Classes.on="{Binding IsAdbConnected}"
+                         ToolTip.Tip="{Binding ConnectionText}"/>
                 <StackPanel Spacing="6" IsVisible="{Binding State.ShowMoreTools}">
                 <Button Classes="side" Content="☰" ToolTip.Tip="Günlük (F10)"
                         Classes.active="{Binding State.IsLogPanel}"
@@ -373,8 +375,6 @@
                 <Button Classes="side" Content="🔉" ToolTip.Tip="Sesi azalt" Command="{Binding NavKeyCommand}" CommandParameter="KEYCODE_VOLUME_DOWN"/>
                 <Button Classes="side" Content="📷" ToolTip.Tip="Ekran görüntüsü (~/Pictures/DroidPad)" Command="{Binding ScreenshotCommand}"/>
                 <Button Classes="side" Content="📦" ToolTip.Tip="APK kur" Click="OnInstallApkClick"/>
-                <Ellipse Classes="conn" Width="9" Height="9" HorizontalAlignment="Center" Classes.on="{Binding IsAdbConnected}"
-                         ToolTip.Tip="{Binding ConnectionText}"/>
                 </StackPanel>
                 <Border Height="1" Background="#2A2E37" Margin="4,2"/>
                 <Button Classes="side" Content="✕" ToolTip.Tip="Çıkış" Click="OnExitClick"/>
